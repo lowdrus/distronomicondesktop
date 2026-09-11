@@ -68,37 +68,55 @@ fn write_current_tag(root: &Path, app: &str, tag: &str) -> io::Result<()> {
 
 fn sync_tree(path: &Path) -> io::Result<()> {
     for entry in fs::read_dir(path)? {
-        let entry = entry?; let p = entry.path();
-        if entry.file_type()?.is_dir() { sync_tree(&p)?; }
-        else if entry.file_type()?.is_file() { fs::File::open(&p)?.sync_all()?; }
+        let entry = entry?;
+        let p = entry.path();
+        if entry.file_type()?.is_dir() {
+            sync_tree(&p)?;
+        } else if entry.file_type()?.is_file() {
+            fs::File::open(&p)?.sync_all()?;
+        }
     }
     Ok(())
 }
 
-fn is_windows_executable(path: &Path) -> bool {
-    path.extension().and_then(|s| s.to_str()).map(|ext| matches!(ext.to_ascii_lowercase().as_str(), "exe"|"com"|"bat"|"cmd")).unwrap_or(false)
-}
-
-fn collect_executables(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?; let p = entry.path();
-        if entry.file_type()?.is_dir() { collect_executables(&p, out)?; }
-        else if entry.file_type()?.is_file() && is_windows_executable(&p) { out.push(p); }
+fn mirror_tree(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            mirror_tree(&source_path, &destination_path)?;
+        } else if file_type.is_file() {
+            if fs::hard_link(&source_path, &destination_path).is_err() {
+                fs::copy(&source_path, &destination_path)?;
+            }
+        }
     }
     Ok(())
 }
 
 fn refresh_bin(bin_dir: &Path, release_dir: &Path) -> io::Result<()> {
-    let temp = bin_dir.with_extension("new"); let old = bin_dir.with_extension("old");
-    let _ = fs::remove_dir_all(&temp); let _ = fs::remove_dir_all(&old); fs::create_dir_all(&temp)?;
-    let mut executables = Vec::new(); collect_executables(release_dir, &mut executables)?;
-    for source in executables { if let Some(name) = source.file_name() { fs::copy(&source, temp.join(name))?; } }
-    if bin_dir.exists() { fs::rename(bin_dir, &old)?; }
-    if let Err(e) = fs::rename(&temp, bin_dir) {
-        if old.exists() && !bin_dir.exists() { let _ = fs::rename(&old, bin_dir); }
-        return Err(e);
+    let temp = bin_dir.with_extension("new");
+    let old = bin_dir.with_extension("old");
+    let _ = fs::remove_dir_all(&temp);
+    let _ = fs::remove_dir_all(&old);
+
+    mirror_tree(release_dir, &temp)?;
+    sync_tree(&temp)?;
+
+    if bin_dir.exists() {
+        fs::rename(bin_dir, &old)?;
     }
-    let _ = fs::remove_dir_all(old); Ok(())
+    if let Err(error) = fs::rename(&temp, bin_dir) {
+        if old.exists() && !bin_dir.exists() {
+            let _ = fs::rename(&old, bin_dir);
+        }
+        return Err(error);
+    }
+    let _ = fs::remove_dir_all(old);
+    Ok(())
 }
 
 pub fn prune_old_releases(releases_dir: &Path, current_tag: &str, retain: usize) -> io::Result<Vec<String>> {
@@ -109,6 +127,10 @@ pub fn prune_old_releases(releases_dir: &Path, current_tag: &str, retain: usize)
         .collect::<Vec<_>>();
     entries.sort_by(|a,b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
     let mut deleted = Vec::new();
-    for (tag,path,_) in entries.into_iter().skip(retain) { if tag != current_tag && fs::remove_dir_all(path).is_ok() { deleted.push(tag); } }
+    for (tag,path,_) in entries.into_iter().skip(retain) {
+        if tag != current_tag && fs::remove_dir_all(path).is_ok() {
+            deleted.push(tag);
+        }
+    }
     Ok(deleted)
 }
