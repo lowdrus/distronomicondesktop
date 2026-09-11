@@ -11,7 +11,11 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-pub fn run(language: Language) -> Result<String, String> {
+pub fn run() -> Result<String, String> {
+    run_language(Language::PtBr)
+}
+
+pub fn run_language(language: Language) -> Result<String, String> {
     let client = Client::builder()
         .user_agent(concat!("DistronomiconDesktop/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(300))
