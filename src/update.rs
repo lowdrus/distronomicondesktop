@@ -18,20 +18,8 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
         .build().map_err(|e| e.to_string())?;
 
     let existing = state::load(&state_path).map_err(|e| e.to_string())?;
-    let previous = existing.as_ref().map(|s| release::Validators {
-        etag: s.etag.clone(),
-        last_modified: s.last_modified.clone(),
-    }).unwrap_or_default();
-
-    let fetched = release::fetch_latest(
-        &client,
-        &config.github_host,
-        &config.repo,
-        token(config),
-        config.allow_prerelease,
-        &previous,
-    )?;
-
+    let previous = existing.as_ref().map(|s| release::Validators { etag: s.etag.clone(), last_modified: s.last_modified.clone() }).unwrap_or_default();
+    let fetched = release::fetch_latest(&client, &config.github_host, &config.repo, token(config), config.allow_prerelease, &previous)?;
     let current = install::current_tag(&install_root, &config.app_name)
         .map_err(|e| e.to_string())?
         .or_else(|| existing.as_ref().map(|s| s.latest_tag.clone()).filter(|s| !s.is_empty()));
@@ -41,9 +29,7 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
             .ok_or_else(|| tr(config.language, "O GitHub não retornou uma release instalável.", "GitHub did not return an installable release.").into());
     }
 
-    let latest = fetched.release.ok_or_else(|| tr(config.language,
-        "Nenhuma release disponível.", "No release available.").to_string())?;
-
+    let latest = fetched.release.ok_or_else(|| tr(config.language, "Nenhuma release disponível.", "No release available.").to_string())?;
     if current.as_deref() == Some(latest.tag_name.as_str()) {
         save_state(&state_path, existing, &latest.tag_name, &previous, &fetched.validators)?;
         return Ok(format!("{}: {}", tr(config.language, "Já está atualizado", "Already up to date"), latest.tag_name));
@@ -65,19 +51,10 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
         }
 
         set_phase(status, config.language, "Instalando de forma segura...", "Installing safely...");
-        let installed = install::install_release(
-            &install_root,
-            &config.app_name,
-            &latest.tag_name,
-            &asset.name,
-            &temp_path,
-        )?;
+        let installed = install::install_release(&install_root, &config.app_name, &latest.tag_name, &asset.name, &temp_path)?;
 
-        let restart_error = if config.restart_command.is_empty() {
-            None
-        } else {
-            restart::execute(&config.restart_command).err().map(|e| e.to_string())
-        };
+        let restart_error = if config.restart_command.is_empty() { None }
+            else { restart::execute(&config.restart_command).err().map(|e| e.to_string()) };
 
         let deleted = install::prune_old_releases(
             &install_root.join(&config.app_name).join("releases"),
@@ -87,36 +64,22 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
 
         save_state(&state_path, existing, &latest.tag_name, &previous, &fetched.validators)?;
 
-        let mut message = format!(
-            "{}: {}\n{}: {}",
-            tr(config.language, "Atualização concluída", "Update completed"),
-            latest.tag_name,
-            tr(config.language, "Instalada em", "Installed at"),
-            installed.display()
-        );
+        let mut message = format!("{}: {}\n{}: {}",
+            tr(config.language, "Atualização concluída", "Update completed"), latest.tag_name,
+            tr(config.language, "Instalada em", "Installed at"), installed.display());
         if !deleted.is_empty() {
-            message.push_str(&format!("\n{}: {}",
-                tr(config.language, "Versões antigas removidas", "Old releases removed"),
-                deleted.join(", ")));
+            message.push_str(&format!("\n{}: {}", tr(config.language, "Versões antigas removidas", "Old releases removed"), deleted.join(", ")));
         }
         if let Some(error) = restart_error {
-            message.push_str(&format!("\n{}: {error}",
-                tr(config.language, "Aviso: o comando de reinício falhou", "Warning: restart command failed")));
+            message.push_str(&format!("\n{}: {error}", tr(config.language, "Aviso: o comando de reinício falhou", "Warning: restart command failed")));
         }
         Ok(message)
     })();
-
     let _ = fs::remove_file(&temp_path);
     result
 }
 
-fn save_state(
-    path: &std::path::Path,
-    existing: Option<state::State>,
-    current_tag: &str,
-    previous: &release::Validators,
-    fresh: &release::Validators,
-) -> Result<(), String> {
+fn save_state(path: &std::path::Path, existing: Option<state::State>, current_tag: &str, previous: &release::Validators, fresh: &release::Validators) -> Result<(), String> {
     let mut value = existing.unwrap_or_default();
     value.latest_tag = current_tag.to_string();
     value.etag = if fresh.etag.is_empty() { previous.etag.clone() } else { fresh.etag.clone() };
@@ -125,14 +88,6 @@ fn save_state(
     state::save_atomic(path, &value).map_err(|e| e.to_string())
 }
 
-fn token(config: &Config) -> Option<&str> {
-    (!config.github_token.trim().is_empty()).then(|| config.github_token.trim())
-}
-
-fn safe_name(value: &str) -> String {
-    value.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }).collect()
-}
-
-fn set_phase(status: &Arc<Mutex<String>>, language: Language, pt: &'static str, en: &'static str) {
-    if let Ok(mut text) = status.lock() { *text = tr(language, pt, en).into(); }
-}
+fn token(config: &Config) -> Option<&str> { (!config.github_token.trim().is_empty()).then(|| config.github_token.trim()) }
+fn safe_name(value: &str) -> String { value.chars().map(|c| if matches!(c, '/'|'\\'|':'|'*'|'?'|'"'|'<'|'>'|'|') { '_' } else { c }).collect() }
+fn set_phase(status: &Arc<Mutex<String>>, language: Language, pt: &'static str, en: &'static str) { if let Ok(mut text) = status.lock() { *text = tr(language, pt, en).into(); } }
