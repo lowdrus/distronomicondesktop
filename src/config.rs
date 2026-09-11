@@ -68,18 +68,30 @@ pub fn normalize_repo(value: &str) -> Result<String, String> {
     Ok(format!("{}/{}", parts[0], parts[1]))
 }
 
-pub fn validate(config: &Config, action: Action) -> Result<(), String> {
-    let app = &config.app_name;
+fn valid_windows_app_name(app: &str) -> bool {
     if app.is_empty()
-        || app.contains('/')
-        || app.contains('\\')
         || app.contains("..")
-        || app.contains('\0')
+        || app.ends_with([' ', '.'])
+        || app.chars().any(|c| c < ' ' || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'))
     {
+        return false;
+    }
+
+    let stem = app.split('.').next().unwrap_or("").to_ascii_uppercase();
+    !matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+    )
+}
+
+pub fn validate(config: &Config, action: Action) -> Result<(), String> {
+    if !valid_windows_app_name(&config.app_name) {
         return Err(tr(
             config.language,
-            "Nome da aplicação inválido. Não use /, \\, .. ou caracteres nulos.",
-            "Invalid application name. Do not use /, \\, .., or null characters.",
+            "Nome da aplicação inválido para Windows. Evite caracteres < > : \" / \\ | ? *, '..', nomes reservados como CON/AUX/NUL/COM1/LPT1 e nomes terminados em ponto ou espaço.",
+            "Invalid Windows application name. Avoid < > : \" / \\ | ? *, '..', reserved names such as CON/AUX/NUL/COM1/LPT1, and names ending in a dot or space.",
         )
         .into());
     }
@@ -148,5 +160,25 @@ mod tests {
         assert!(
             normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()
         );
+    }
+
+    #[test]
+    fn accepts_normal_windows_app_name() {
+        assert!(valid_windows_app_name("distronomicondesktop"));
+        assert!(valid_windows_app_name("meu-app"));
+    }
+
+    #[test]
+    fn rejects_reserved_windows_app_names() {
+        for name in ["CON", "con.txt", "AUX", "NUL", "COM1", "LPT9"] {
+            assert!(!valid_windows_app_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_windows_filename_characters_and_endings() {
+        for name in ["app:one", "app?", "app*", "app.", "app ", "../app"] {
+            assert!(!valid_windows_app_name(name), "{name}");
+        }
     }
 }
