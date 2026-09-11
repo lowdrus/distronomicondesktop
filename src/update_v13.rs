@@ -102,19 +102,21 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
         set_phase(
             status,
             config.language,
-            "Executando health check...",
+            "Executando verificação de saúde...",
             "Running health check...",
         );
         if let Err(health_error) = restart::execute(&config.health_check_command) {
             if !old.is_empty() && old != plan.release.tag_name {
-                let rollback_result =
-                    install::activate_release(&install_root, &config.app_name, &old);
+                let rollback_result = install::activate_release(&install_root, &config.app_name, &old);
                 let mut previous_state = state::load(&state_path)
                     .map_err(|e| e.to_string())?
                     .unwrap_or_default();
                 previous_state.latest_tag = old.clone();
                 previous_state.installed_at_unix = state::now_unix();
                 let _ = state::save_atomic(&state_path, &previous_state);
+                if rollback_result.is_ok() && !config.restart_command.trim().is_empty() {
+                    let _ = restart::execute(&config.restart_command);
+                }
                 let result = if rollback_result.is_ok() {
                     "health-check-failed; automatic-rollback-ok"
                 } else {
@@ -135,7 +137,7 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
                     "{}: {health_error}. {}: {old}",
                     tr(
                         config.language,
-                        "Health check falhou",
+                        "A verificação de saúde falhou",
                         "Health check failed"
                     ),
                     tr(
@@ -149,7 +151,7 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
                 "{}: {health_error}",
                 tr(
                     config.language,
-                    "Health check falhou e não há versão anterior para rollback",
+                    "A verificação de saúde falhou e não há versão anterior para rollback",
                     "Health check failed and there is no previous version to roll back to"
                 )
             ));
@@ -160,6 +162,12 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
         .map_err(|e| e.to_string())?
         .unwrap_or_default();
     state_value.latest_tag = plan.release.tag_name.clone();
+    if !plan.validators.etag.is_empty() {
+        state_value.etag = plan.validators.etag.clone();
+    }
+    if !plan.validators.last_modified.is_empty() {
+        state_value.last_modified = plan.validators.last_modified.clone();
+    }
     state_value.installed_at_unix = state::now_unix();
     state::save_atomic(&state_path, &state_value).map_err(|e| e.to_string())?;
 
