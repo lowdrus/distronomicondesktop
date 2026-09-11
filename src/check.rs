@@ -31,7 +31,7 @@ pub fn check(config: &Config) -> Result<String, String> {
 
     let client = Client::builder()
         .user_agent(concat!("DistronomiconDesktop/", env!("CARGO_PKG_VERSION")))
-        .timeout(Duration::from_secs(300))
+        .timeout(Duration::from_secs(config.http_timeout_secs))
         .build().map_err(|e| e.to_string())?;
 
     let fetched = release::fetch_latest(
@@ -47,6 +47,10 @@ pub fn check(config: &Config) -> Result<String, String> {
         .map_err(|e| e.to_string())?
         .or_else(|| existing.as_ref().map(|s| s.latest_tag.clone()).filter(|s| !s.is_empty()));
 
+    if let Some(ref current_tag) = current {
+        save_validators(&state_path, existing.clone(), current_tag, &previous, &fetched.validators)?;
+    }
+
     if fetched.not_modified {
         return Ok(current.map(|tag| format!("{}: {tag}", tr(config.language, "Atualizado", "Up to date")))
             .unwrap_or_else(|| tr(config.language, "Nenhuma versão instalada.", "No version installed.").into()));
@@ -54,10 +58,6 @@ pub fn check(config: &Config) -> Result<String, String> {
 
     let latest = fetched.release.ok_or_else(|| tr(config.language,
         "Nenhuma release disponível.", "No release available.").to_string())?;
-
-    if let Some(ref current_tag) = current {
-        save_validators(&state_path, existing, current_tag, &previous, &fetched.validators)?;
-    }
 
     Ok(match current {
         Some(current) if current == latest.tag_name =>
