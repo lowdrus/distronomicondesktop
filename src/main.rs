@@ -110,6 +110,8 @@ impl DesktopApp {
                 Action::Check => check::check(&config),
                 Action::Update => update::run(&config, &status),
                 Action::Version => check::version(&config),
+                Action::Rollback => check::rollback(&config),
+                Action::Doctor => check::doctor(&config),
                 Action::Unlock => check::unlock(&config),
             };
 
@@ -160,10 +162,12 @@ impl eframe::App for DesktopApp {
             ui.add_space(14.0);
 
             ui.add_enabled_ui(!is_busy, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     if ui.button(tr(language, "Verificar", "Check")).clicked() { self.run(Action::Check); }
                     if ui.button(tr(language, "Atualizar", "Update")).clicked() { self.run(Action::Update); }
                     if ui.button(tr(language, "Versão", "Version")).clicked() { self.run(Action::Version); }
+                    if ui.button(tr(language, "Rollback", "Rollback")).clicked() { self.run(Action::Rollback); }
+                    if ui.button(tr(language, "Diagnóstico", "Doctor")).clicked() { self.run(Action::Doctor); }
                 });
             });
 
@@ -224,8 +228,8 @@ impl eframe::App for DesktopApp {
                     ui.add_space(6.0);
 
                     ui.label(tr(language,
-                        "Comando após atualização (opcional)",
-                        "Post-update command (optional)"));
+                        "Comando após atualização/rollback (opcional)",
+                        "Post-update/rollback command (optional)"));
                     ui.text_edit_singleline(&mut self.restart_command);
                     ui.add_space(8.0);
 
@@ -254,8 +258,8 @@ impl eframe::App for DesktopApp {
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([680.0, 650.0])
-            .with_min_inner_size([560.0, 480.0])
+            .with_inner_size([720.0, 680.0])
+            .with_min_inner_size([580.0, 500.0])
             .with_title("Distronomicon Desktop"),
         ..Default::default()
     };
