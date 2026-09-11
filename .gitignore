@@ -1,6 +1,8 @@
 /target/
+/portable/
 *.pdb
 *.ilk
-*.tmp
+*.exp
+*.lib
 .DS_Store
 Thumbs.db
