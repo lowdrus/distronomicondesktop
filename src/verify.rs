@@ -105,19 +105,69 @@ pub fn verify_sha256(
 }
 
 fn parse_checksum(text: &str, wanted: &str) -> Result<String, String> {
-    for raw in text.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') || line.len() < 66 {
+    for raw_line in text.lines() {
+        let line = raw_line.trim_end_matches('\r').trim_start();
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
+        if line.len() < 66 {
+            return Err(format!("Invalid checksum line: {line}"));
+        }
+
         let (hash, rest) = line.split_at(64);
         if !hash.chars().all(|c| c.is_ascii_hexdigit()) {
-            continue;
+            return Err(format!("Invalid SHA-256 value: {hash}"));
         }
-        let name = rest.trim_start_matches([' ', '*']).trim();
-        if name == wanted {
+
+        let filename = if let Some(name) = rest.strip_prefix("  ") {
+            name
+        } else if let Some(name) = rest.strip_prefix(" *") {
+            name
+        } else {
+            return Err(format!("Invalid checksum separator: {rest}"));
+        };
+        if filename.is_empty() {
+            return Err("Checksum filename is empty".into());
+        }
+        if filename == wanted {
             return Ok(hash.to_string());
         }
     }
     Err(format!("Checksum entry not found for {wanted}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_checksum;
+
+    #[test]
+    fn parses_two_space_format() {
+        let text = format!("{}  app.zip", "a".repeat(64));
+        assert_eq!(parse_checksum(&text, "app.zip").unwrap(), "a".repeat(64));
+    }
+
+    #[test]
+    fn parses_asterisk_format() {
+        let text = format!("{} *app.exe", "b".repeat(64));
+        assert_eq!(parse_checksum(&text, "app.exe").unwrap(), "b".repeat(64));
+    }
+
+    #[test]
+    fn accepts_comments_whitespace_and_crlf() {
+        let text = format!("  # comment\r\n{}  app.zip\r\n", "c".repeat(64));
+        assert_eq!(parse_checksum(&text, "app.zip").unwrap(), "c".repeat(64));
+    }
+
+    #[test]
+    fn rejects_short_or_invalid_lines() {
+        assert!(parse_checksum("abc  app.zip", "app.zip").is_err());
+        let invalid = format!("{} app.zip", "d".repeat(64));
+        assert!(parse_checksum(&invalid, "app.zip").is_err());
+    }
+
+    #[test]
+    fn reports_missing_asset() {
+        let text = format!("{}  other.zip", "e".repeat(64));
+        assert!(parse_checksum(&text, "app.zip").is_err());
+    }
 }
