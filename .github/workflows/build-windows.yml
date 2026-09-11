@@ -123,9 +123,10 @@ jobs:
               portable/DistronomiconDesktop.exe `
               SHA256SUMS.txt `
               --target $env:GITHUB_SHA `
-              --title "Distronomicon Desktop $tag" `
+              --title "DISTROD-$tag" `
               --generate-notes
           } else {
+            gh release edit $tag --title "DISTROD-$tag"
             gh release upload $tag `
               DistronomiconDesktop-Windows-Portable.zip `
               portable/DistronomiconDesktop.exe `
