@@ -25,6 +25,8 @@ O executável é um aplicativo gráfico Windows x86-64 compilado com CRT estáti
 
 A interface possui **PT-BR / EN**, modo **Dark / Light** com acento visual dourado inspirado na estética macOS Golden Gate e ícone próprio embutido no `.exe`.
 
+Os builds de desenvolvimento são reproduzíveis com `Cargo.lock` versionado; o usuário final continua recebendo apenas o `.exe`/ZIP portátil.
+
 ## Paridade com o Distronomicon original
 
 O projeto original [`jtdowney/distronomicon`](https://github.com/jtdowney/distronomicon) é uma ferramenta Linux que consulta GitHub Releases e executa atualizações atômicas. O Distronomicon Desktop preserva esse núcleo e substitui integrações exclusivas de Linux por equivalentes apropriados para Windows.
@@ -294,16 +296,17 @@ O workflow Windows executa:
 
 1. checkout;
 2. Rust stable;
-3. formatação;
-4. Clippy `-D warnings`;
-5. testes;
-6. build release com CRT estático;
-7. geração do ícone nativo via `build.rs`;
-8. ZIP portátil;
-9. validação da assinatura Windows `MZ`;
-10. SHA-256;
-11. artifact de CI;
-12. criação/atualização automática da GitHub Release correspondente à versão do `Cargo.toml` quando `main` fica verde.
+3. geração/validação do `Cargo.lock`;
+4. normalização de `rustfmt` quando necessário no `main`;
+5. Clippy `-D warnings`;
+6. testes;
+7. build release com CRT estático;
+8. geração e validação do ícone nativo via `build.rs`;
+9. ZIP portátil;
+10. validação da assinatura Windows `MZ`;
+11. SHA-256;
+12. artifact de CI;
+13. criação/atualização automática da GitHub Release correspondente à versão do `Cargo.toml` quando `main` fica verde.
 
 Cargo/Rust são apenas ferramentas de desenvolvimento e CI. O usuário final recebe o `.exe` portátil.
 
