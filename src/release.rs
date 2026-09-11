@@ -1,6 +1,7 @@
 use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, AUTHORIZATION, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED};
 use serde::Deserialize;
+use std::cmp::Reverse;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Release {
@@ -11,6 +12,8 @@ pub struct Release {
     pub prerelease: bool,
     #[serde(default)]
     pub draft: bool,
+    #[serde(default)]
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -43,7 +46,7 @@ pub fn fetch_latest(
 ) -> Result<FetchResult, String> {
     let host = host.trim_end_matches('/');
     let url = if allow_prerelease {
-        format!("{host}/repos/{repo}/releases?per_page=20")
+        format!("{host}/repos/{repo}/releases")
     } else {
         format!("{host}/repos/{repo}/releases/latest")
     };
@@ -74,9 +77,10 @@ pub fn fetch_latest(
 
     let response = response.error_for_status().map_err(|e| e.to_string())?;
     let release = if allow_prerelease {
-        let releases: Vec<Release> = response.json().map_err(|e| e.to_string())?;
-        releases.into_iter().find(|r| !r.draft)
-            .ok_or_else(|| "No GitHub release found".to_string())?
+        let mut releases: Vec<Release> = response.json().map_err(|e| e.to_string())?;
+        releases.retain(|r| !r.draft);
+        releases.sort_by_key(|r| Reverse(r.created_at.clone()));
+        releases.into_iter().next().ok_or_else(|| "No GitHub release found".to_string())?
     } else {
         response.json::<Release>().map_err(|e| e.to_string())?
     };
