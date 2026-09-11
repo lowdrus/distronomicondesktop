@@ -124,10 +124,10 @@ fn mirror_tree(source: &Path, destination: &Path) -> io::Result<()> {
         let file_type = entry.file_type()?;
         if file_type.is_dir() {
             mirror_tree(&source_path, &destination_path)?;
-        } else if file_type.is_file() {
-            if fs::hard_link(&source_path, &destination_path).is_err() {
-                fs::copy(&source_path, &destination_path)?;
-            }
+        } else if file_type.is_file()
+            && fs::hard_link(&source_path, &destination_path).is_err()
+        {
+            fs::copy(&source_path, &destination_path)?;
         }
     }
     Ok(())
