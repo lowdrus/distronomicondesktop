@@ -23,7 +23,7 @@ pub fn now_unix() -> u64 {
 
 pub fn load(path: &Path) -> io::Result<Option<State>> {
     if !path.exists() {
-        let backup = backup_path(path);
+        let backup = atomic_file::backup_path(path);
         if !backup.exists() {
             return Ok(None);
         }
@@ -33,7 +33,7 @@ pub fn load(path: &Path) -> io::Result<Option<State>> {
     match read_state(path) {
         Ok(state) => Ok(Some(state)),
         Err(primary_error) => {
-            let backup = backup_path(path);
+            let backup = atomic_file::backup_path(path);
             if backup.exists() {
                 read_state(&backup).map(Some)
             } else {
@@ -54,16 +54,12 @@ fn read_state(path: &Path) -> io::Result<State> {
     serde_json::from_str(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
-fn backup_path(path: &Path) -> std::path::PathBuf {
-    path.with_extension("json.bak")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn backup_path_is_predictable() {
-        assert!(backup_path(Path::new("state.json")).ends_with("state.json.bak"));
+        assert!(atomic_file::backup_path(Path::new("state.json")).ends_with("state.json.bak"));
     }
 }
