@@ -156,7 +156,7 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
                 .map(|e| e.to_string())
         };
 
-        let deleted = install::prune_old_releases(
+        let (deleted, failed_prunes) = install::prune_old_releases(
             &install_root.join(&config.app_name).join("releases"),
             &latest.tag_name,
             config.retain,
@@ -187,6 +187,21 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
                     "Old releases removed"
                 ),
                 deleted.join(", ")
+            ));
+        }
+        if !failed_prunes.is_empty() {
+            let details = failed_prunes
+                .iter()
+                .map(|(tag, error)| format!("{tag}: {error}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            message.push_str(&format!(
+                "\n{}: {details}",
+                tr(
+                    config.language,
+                    "Aviso: não foi possível remover algumas versões antigas",
+                    "Warning: some old releases could not be removed"
+                )
             ));
         }
         if let Some(error) = restart_error {
