@@ -121,7 +121,10 @@ mod tests {
 
     #[test]
     fn normalizes_owner_repo() {
-        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("lowdrus/distronomicondesktop").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
@@ -142,6 +145,8 @@ mod tests {
 
     #[test]
     fn rejects_extra_path_segments() {
-        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
+        assert!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()
+        );
     }
 }
