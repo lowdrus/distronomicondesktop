@@ -74,15 +74,34 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish or refresh GitHub Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" `
-            DistronomiconDesktop-Windows-Portable.zip `
-            portable/DistronomiconDesktop.exe `
-            SHA256SUMS.txt `
-            --title "Distronomicon Desktop ${{ github.ref_name }}" `
-            --generate-notes
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $tag = $env:GITHUB_REF_NAME
+          } else {
+            $versionLine = Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+            if (-not $versionLine) { throw 'Could not read package version from Cargo.toml' }
+            $version = $versionLine.Matches[0].Groups[1].Value
+            $tag = "v$version"
+          }
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag `
+              DistronomiconDesktop-Windows-Portable.zip `
+              portable/DistronomiconDesktop.exe `
+              SHA256SUMS.txt `
+              --target $env:GITHUB_SHA `
+              --title "Distronomicon Desktop $tag" `
+              --generate-notes
+          } else {
+            gh release upload $tag `
+              DistronomiconDesktop-Windows-Portable.zip `
+              portable/DistronomiconDesktop.exe `
+              SHA256SUMS.txt `
+              --clobber
+          }
