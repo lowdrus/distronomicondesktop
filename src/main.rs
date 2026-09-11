@@ -1,148 +1,135 @@
 #![windows_subsystem = "windows"]
 
+mod check;
+mod config;
+mod install;
+mod lock;
+mod release;
+mod restart;
+mod state;
+mod update;
+mod verify;
+
+use config::{tr, Action, Config, Language};
 use eframe::egui;
-use reqwest::blocking::Client;
-use serde::Deserialize;
-use std::{fs, io::Write, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration};
-
-#[derive(Clone, Copy, PartialEq)]
-enum Language { PtBr, En }
-
-impl Language {
-    fn label(self) -> &'static str { match self { Self::PtBr => "PT-BR", Self::En => "EN" } }
-}
-
-#[derive(Deserialize)]
-struct Release { tag_name: String, html_url: String, assets: Vec<Asset> }
-
-#[derive(Deserialize)]
-struct Asset { name: String, browser_download_url: String }
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
+    thread,
+    time::Duration,
+};
 
 struct DesktopApp {
     language: Language,
+    app_name: String,
     repo: String,
-    asset_filter: String,
-    install_dir: String,
+    asset_pattern: String,
+    checksum_pattern: String,
+    install_root: String,
+    state_root: String,
+    github_host: String,
+    github_token: String,
+    allow_prerelease: bool,
+    skip_verification: bool,
+    retain: usize,
+    restart_command: String,
     status: Arc<Mutex<String>>,
+    busy: Arc<AtomicBool>,
 }
 
 impl Default for DesktopApp {
     fn default() -> Self {
-        let default_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("apps");
+        let base = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(PathBuf::from))
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+
         Self {
             language: Language::PtBr,
+            app_name: "myapp".into(),
             repo: "owner/repository".into(),
-            asset_filter: ".zip".into(),
-            install_dir: default_dir.display().to_string(),
-            status: Arc::new(Mutex::new("Pronto. Informe o repositório e clique em Verificar.".into())),
+            asset_pattern: r"(?i).*\.(zip|exe)$".into(),
+            checksum_pattern: r"(?i)^(SHA256SUMS|checksums?(\.txt)?|.*sha256.*)$".into(),
+            install_root: base.join("managed").display().to_string(),
+            state_root: base.join(".distronomicon").display().to_string(),
+            github_host: "https://api.github.com".into(),
+            github_token: String::new(),
+            allow_prerelease: false,
+            skip_verification: false,
+            retain: 3,
+            restart_command: String::new(),
+            status: Arc::new(Mutex::new("Pronto. Configure a aplicação e o repositório.".into())),
+            busy: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 impl DesktopApp {
-    fn t(&self, pt: &'static str, en: &'static str) -> &'static str {
-        match self.language { Language::PtBr => pt, Language::En => en }
+    fn config(&self) -> Config {
+        Config {
+            language: self.language,
+            app_name: self.app_name.trim().to_string(),
+            repo: self.repo.trim().to_string(),
+            asset_pattern: self.asset_pattern.trim().to_string(),
+            checksum_pattern: self.checksum_pattern.trim().to_string(),
+            install_root: self.install_root.trim().to_string(),
+            state_root: self.state_root.trim().to_string(),
+            github_host: self.github_host.trim().to_string(),
+            github_token: self.github_token.clone(),
+            allow_prerelease: self.allow_prerelease,
+            skip_verification: self.skip_verification,
+            retain: self.retain,
+            restart_command: self.restart_command.trim().to_string(),
+        }
     }
 
     fn set_status(&self, text: impl Into<String>) {
-        if let Ok(mut s) = self.status.lock() { *s = text.into(); }
+        if let Ok(mut status) = self.status.lock() { *status = text.into(); }
     }
 
-    fn run_check(&self, do_update: bool) {
-        let repo = self.repo.trim().to_string();
-        let filter = self.asset_filter.trim().to_string();
-        let install_dir = self.install_dir.trim().to_string();
-        let status = Arc::clone(&self.status);
-        let language = self.language;
-
-        if !repo.contains('/') {
-            self.set_status(self.t("Use o formato owner/repository.", "Use the owner/repository format."));
+    fn run(&self, action: Action) {
+        if self.busy.swap(true, Ordering::SeqCst) { return; }
+        let config = self.config();
+        if let Err(message) = config::validate(&config, action) {
+            self.set_status(message);
+            self.busy.store(false, Ordering::SeqCst);
             return;
         }
 
+        let status = Arc::clone(&self.status);
+        let busy = Arc::clone(&self.busy);
         thread::spawn(move || {
-            let result = (|| -> Result<String, String> {
-                if let Ok(mut s) = status.lock() {
-                    *s = match language {
-                        Language::PtBr => "Consultando a release mais recente no GitHub...".into(),
-                        Language::En => "Checking the latest GitHub release...".into(),
-                    };
+            let language = config.language;
+            if matches!(action, Action::Check) {
+                if let Ok(mut text) = status.lock() {
+                    *text = tr(language, "Consultando releases no GitHub...", "Checking GitHub releases...").into();
                 }
+            }
 
-                let client = Client::builder()
-                    .user_agent("DistronomiconDesktop/1.0")
-                    .timeout(Duration::from_secs(30))
-                    .build()
-                    .map_err(|e| e.to_string())?;
+            let result = match action {
+                Action::Check => check::check(&config),
+                Action::Update => update::run(&config, &status),
+                Action::Version => check::version(&config),
+                Action::Unlock => check::unlock(&config),
+            };
 
-                let api = format!("https://api.github.com/repos/{repo}/releases/latest");
-                let release: Release = client.get(api).send().map_err(|e| e.to_string())?
-                    .error_for_status().map_err(|e| e.to_string())?
-                    .json().map_err(|e| e.to_string())?;
-
-                let asset = release.assets.iter().find(|a| filter.is_empty() || a.name.to_lowercase().contains(&filter.to_lowercase()));
-
-                if !do_update {
-                    return Ok(match (language, asset) {
-                        (Language::PtBr, Some(a)) => format!("Última versão: {}\nArquivo: {}\n{}", release.tag_name, a.name, release.html_url),
-                        (Language::En, Some(a)) => format!("Latest version: {}\nAsset: {}\n{}", release.tag_name, a.name, release.html_url),
-                        (Language::PtBr, None) => format!("Última versão: {}\nNenhum arquivo corresponde ao filtro '{}'.\n{}", release.tag_name, filter, release.html_url),
-                        (Language::En, None) => format!("Latest version: {}\nNo asset matches filter '{}'.\n{}", release.tag_name, filter, release.html_url),
-                    });
-                }
-
-                let asset = asset.ok_or_else(|| match language {
-                    Language::PtBr => format!("Nenhum arquivo da release corresponde ao filtro '{}'.", filter),
-                    Language::En => format!("No release asset matches filter '{}'.", filter),
-                })?;
-
-                if let Ok(mut s) = status.lock() {
-                    *s = match language {
-                        Language::PtBr => format!("Baixando {}...", asset.name),
-                        Language::En => format!("Downloading {}...", asset.name),
-                    };
-                }
-
-                let bytes = client.get(&asset.browser_download_url).send().map_err(|e| e.to_string())?
-                    .error_for_status().map_err(|e| e.to_string())?
-                    .bytes().map_err(|e| e.to_string())?;
-
-                let base = PathBuf::from(&install_dir).join(repo.replace('/', "_"));
-                fs::create_dir_all(&base).map_err(|e| e.to_string())?;
-                let target = base.join(&asset.name);
-                let mut file = fs::File::create(&target).map_err(|e| e.to_string())?;
-                file.write_all(&bytes).map_err(|e| e.to_string())?;
-
-                if asset.name.to_lowercase().ends_with(".zip") {
-                    let reader = std::io::Cursor::new(bytes);
-                    let mut archive = zip::ZipArchive::new(reader).map_err(|e| e.to_string())?;
-                    let extract_dir = base.join(release.tag_name.trim_start_matches('v'));
-                    fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
-                    archive.extract(&extract_dir).map_err(|e| e.to_string())?;
-                    Ok(match language {
-                        Language::PtBr => format!("Atualização concluída.\nVersão: {}\nInstalada em: {}", release.tag_name, extract_dir.display()),
-                        Language::En => format!("Update completed.\nVersion: {}\nInstalled at: {}", release.tag_name, extract_dir.display()),
-                    })
-                } else {
-                    Ok(match language {
-                        Language::PtBr => format!("Download concluído.\nVersão: {}\nArquivo salvo em: {}", release.tag_name, target.display()),
-                        Language::En => format!("Download completed.\nVersion: {}\nSaved to: {}", release.tag_name, target.display()),
-                    })
-                }
-            })();
-
-            if let Ok(mut s) = status.lock() {
-                *s = match result {
-                    Ok(v) => v,
-                    Err(e) => match language { Language::PtBr => format!("Erro: {e}"), Language::En => format!("Error: {e}") },
+            if let Ok(mut text) = status.lock() {
+                *text = match result {
+                    Ok(message) => message,
+                    Err(error) => format!("{}: {error}", tr(language, "Erro", "Error")),
                 };
             }
+            busy.store(false, Ordering::SeqCst);
         });
     }
 }
 
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let language = self.language;
+        let is_busy = self.busy.load(Ordering::SeqCst);
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Distronomicon Desktop");
@@ -155,48 +142,121 @@ impl eframe::App for DesktopApp {
                         });
                 });
             });
-            ui.label(self.t("Atualizador portátil nativo para Windows. Sem terminal, WSL ou instalação.", "Native portable updater for Windows. No terminal, WSL, or installation required."));
+
+            ui.label(tr(language,
+                "Gerenciador de releases portátil e nativo para Windows.",
+                "Portable native release manager for Windows."));
+            ui.small(tr(language,
+                "Sem WSL, terminal ou instalação.",
+                "No WSL, terminal, or installation required."));
             ui.add_space(14.0);
 
-            ui.label(self.t("Repositório GitHub", "GitHub repository"));
+            ui.label(tr(language, "Aplicação", "Application"));
+            ui.text_edit_singleline(&mut self.app_name);
+            ui.add_space(8.0);
+
+            ui.label(tr(language, "Repositório GitHub", "GitHub repository"));
             ui.text_edit_singleline(&mut self.repo);
-            ui.add_space(8.0);
-
-            ui.label(self.t("Filtro do arquivo da release", "Release asset filter"));
-            ui.text_edit_singleline(&mut self.asset_filter);
-            ui.small(self.t("Ex.: .zip, windows, win64, x64", "Examples: .zip, windows, win64, x64"));
-            ui.add_space(8.0);
-
-            ui.label(self.t("Pasta de destino", "Destination folder"));
-            ui.text_edit_singleline(&mut self.install_dir);
+            ui.small("owner/repository");
             ui.add_space(14.0);
 
-            ui.horizontal(|ui| {
-                if ui.button(self.t("Verificar atualização", "Check for update")).clicked() { self.run_check(false); }
-                if ui.button(self.t("Baixar / Atualizar", "Download / Update")).clicked() { self.run_check(true); }
+            ui.add_enabled_ui(!is_busy, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.button(tr(language, "Verificar", "Check")).clicked() { self.run(Action::Check); }
+                    if ui.button(tr(language, "Atualizar", "Update")).clicked() { self.run(Action::Update); }
+                    if ui.button(tr(language, "Versão", "Version")).clicked() { self.run(Action::Version); }
+                });
             });
 
-            ui.add_space(16.0);
+            if is_busy {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(tr(language, "Processando...", "Working..."));
+                });
+            }
+
+            ui.add_space(14.0);
+            egui::CollapsingHeader::new(tr(language, "Opções avançadas", "Advanced options"))
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui.label(tr(language, "Pasta de instalação", "Install folder"));
+                    ui.text_edit_singleline(&mut self.install_root);
+                    ui.add_space(6.0);
+
+                    ui.label(tr(language, "Pasta de estado", "State folder"));
+                    ui.text_edit_singleline(&mut self.state_root);
+                    ui.add_space(6.0);
+
+                    ui.label(tr(language, "Padrão do asset (Regex)", "Asset pattern (Regex)"));
+                    ui.text_edit_singleline(&mut self.asset_pattern);
+                    ui.add_space(6.0);
+
+                    ui.label(tr(language, "Padrão do checksum (Regex)", "Checksum pattern (Regex)"));
+                    ui.text_edit_singleline(&mut self.checksum_pattern);
+                    ui.add_space(6.0);
+
+                    ui.checkbox(&mut self.skip_verification, tr(language,
+                        "Pular verificação SHA-256 (não recomendado)",
+                        "Skip SHA-256 verification (not recommended)"));
+                    ui.checkbox(&mut self.allow_prerelease, tr(language,
+                        "Permitir prereleases",
+                        "Allow prereleases"));
+                    ui.add_space(6.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label(tr(language, "Manter releases recentes", "Keep recent releases"));
+                        ui.add(egui::DragValue::new(&mut self.retain).range(0..=20));
+                    });
+                    ui.small(tr(language,
+                        "A versão atual nunca é removida.",
+                        "The current version is never removed."));
+                    ui.add_space(6.0);
+
+                    ui.label("GitHub API host");
+                    ui.text_edit_singleline(&mut self.github_host);
+                    ui.add_space(6.0);
+
+                    ui.label(tr(language, "GitHub token (opcional)", "GitHub token (optional)"));
+                    ui.add(egui::TextEdit::singleline(&mut self.github_token).password(true));
+                    ui.small(tr(language,
+                        "Para repositórios privados ou maior limite de API.",
+                        "For private repositories or higher API limits."));
+                    ui.add_space(6.0);
+
+                    ui.label(tr(language,
+                        "Comando após atualização (opcional)",
+                        "Post-update command (optional)"));
+                    ui.text_edit_singleline(&mut self.restart_command);
+                    ui.add_space(8.0);
+
+                    ui.add_enabled_ui(!is_busy, |ui| {
+                        if ui.button(tr(language, "Forçar desbloqueio", "Force unlock")).clicked() {
+                            self.run(Action::Unlock);
+                        }
+                    });
+                });
+
+            ui.add_space(14.0);
             ui.separator();
-            ui.label(self.t("Status", "Status"));
+            ui.label("Status");
             let mut text = self.status.lock().map(|s| s.clone()).unwrap_or_default();
             ui.add(egui::TextEdit::multiline(&mut text)
-                .desired_rows(12)
+                .desired_rows(10)
                 .desired_width(f32::INFINITY)
                 .font(egui::TextStyle::Monospace)
                 .interactive(false));
-            ui.add_space(8.0);
-            ui.small(self.t("Funciona com releases públicas do GitHub e salva tudo dentro da pasta escolhida.", "Works with public GitHub releases and saves everything in the selected folder."));
         });
-        ctx.request_repaint_after(Duration::from_millis(250));
+
+        ctx.request_repaint_after(Duration::from_millis(200));
     }
 }
 
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([620.0, 500.0])
-            .with_min_inner_size([520.0, 420.0])
+            .with_inner_size([680.0, 650.0])
+            .with_min_inner_size([560.0, 480.0])
             .with_title("Distronomicon Desktop"),
         ..Default::default()
     };
