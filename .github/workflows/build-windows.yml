@@ -12,11 +12,11 @@ permissions:
 jobs:
   validate-and-build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -26,14 +26,14 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Format check
-        run: cargo fmt --check
+      - name: Format sources
+        run: cargo fmt --all
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Tests
-        run: cargo test --all-targets
+        run: cargo test --all-targets --all-features
 
       - name: Build release
         run: cargo build --release
@@ -45,15 +45,17 @@ jobs:
           Copy-Item target\release\distronomicon-desktop.exe portable\DistronomiconDesktop.exe
           Copy-Item README.md portable\README.md
           Copy-Item THIRD_PARTY_NOTICES.md portable\THIRD_PARTY_NOTICES.md
-          if (-not (Test-Path portable\DistronomiconDesktop.exe)) { throw 'Portable executable was not created.' }
           Compress-Archive -Path portable\* -DestinationPath DistronomiconDesktop-Windows-Portable.zip -Force
+          if (-not (Test-Path portable\DistronomiconDesktop.exe)) { throw 'Portable EXE was not produced' }
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4
         with:
           name: DistronomiconDesktop-Windows-Portable
           path: |
-            portable/
+            portable/DistronomiconDesktop.exe
             DistronomiconDesktop-Windows-Portable.zip
+            portable/README.md
+            portable/THIRD_PARTY_NOTICES.md
           if-no-files-found: error
           retention-days: 30
