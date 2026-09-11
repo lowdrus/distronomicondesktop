@@ -43,7 +43,26 @@ pub fn install_release(
 
     fs::rename(&staging, &target).map_err(|e| e.to_string())?;
     refresh_bin(&app_root.join("bin"), &target).map_err(|e| e.to_string())?;
+    write_current_tag(root, app, tag).map_err(|e| e.to_string())?;
     Ok(target)
+}
+
+pub fn current_tag(root: &Path, app: &str) -> io::Result<Option<String>> {
+    let path = root.join(app).join("current.txt");
+    if !path.exists() { return Ok(None); }
+    let tag = fs::read_to_string(path)?.trim().to_string();
+    if tag.is_empty() { Ok(None) } else { Ok(Some(tag)) }
+}
+
+fn write_current_tag(root: &Path, app: &str, tag: &str) -> io::Result<()> {
+    let app_root = root.join(app);
+    fs::create_dir_all(&app_root)?;
+    let current = app_root.join("current.txt");
+    let temp = app_root.join("current.tmp");
+    fs::write(&temp, tag)?;
+    if current.exists() { fs::remove_file(&current)?; }
+    fs::rename(temp, current)?;
+    Ok(())
 }
 
 fn extract_zip(source: &Path, destination: &Path) -> Result<(), String> {
