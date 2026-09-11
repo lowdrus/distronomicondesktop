@@ -2,7 +2,7 @@ name: Windows CI and Portable Build
 
 on:
   push:
-    branches: [main, native-windows-port]
+    branches: [main, native-windows-port, feature-v1.3]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Normalize Rust formatting and lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature-v1.3')
         shell: pwsh
         run: |
           cargo fmt --all
@@ -42,7 +42,8 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add Cargo.lock build.rs src
             git commit -m "Normalize Rust formatting and lock dependencies"
-            git push origin HEAD:main
+            $branch = $env:GITHUB_REF_NAME
+            git push origin "HEAD:$branch"
           }
 
       - name: Cache Cargo
