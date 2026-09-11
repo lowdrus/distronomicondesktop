@@ -10,7 +10,7 @@ pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static st
 }
 
 #[derive(Clone, Copy)]
-pub enum Action { Check, Update, Version, Unlock }
+pub enum Action { Check, Update, Version, Rollback, Doctor, Unlock }
 
 #[derive(Clone)]
 pub struct Config {
