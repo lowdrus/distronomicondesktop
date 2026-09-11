@@ -24,8 +24,7 @@ pub fn install_release(root: &Path, app: &str, tag: &str, asset_name: &str, down
     let target = releases.join(tag);
     if target.exists() { let _ = fs::remove_dir_all(&staging); return Err(format!("release already exists: {}", target.display())); }
     fs::rename(&staging, &target).map_err(|e| e.to_string())?;
-    refresh_bin(&app_root.join("bin"), &target).map_err(|e| e.to_string())?;
-    write_current_tag(root, app, tag).map_err(|e| e.to_string())?;
+    activate_release(root, app, tag).map_err(|e| e.to_string())?;
     Ok(target)
 }
 
@@ -34,6 +33,27 @@ pub fn current_tag(root: &Path, app: &str) -> io::Result<Option<String>> {
     if !path.exists() { return Ok(None); }
     let tag = fs::read_to_string(path)?.trim().to_string();
     Ok((!tag.is_empty()).then_some(tag))
+}
+
+pub fn list_releases(root: &Path, app: &str) -> io::Result<Vec<String>> {
+    let releases = root.join(app).join("releases");
+    if !releases.exists() { return Ok(Vec::new()); }
+    let mut entries = fs::read_dir(releases)?.filter_map(Result::ok)
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter_map(|e| Some((e.file_name().to_string_lossy().to_string(), e.metadata().ok()?.modified().ok()?)))
+        .collect::<Vec<_>>();
+    entries.sort_by(|a,b| b.1.cmp(&a.1).then_with(|| b.0.cmp(&a.0)));
+    Ok(entries.into_iter().map(|(tag,_)| tag).collect())
+}
+
+pub fn activate_release(root: &Path, app: &str, tag: &str) -> io::Result<()> {
+    let app_root = root.join(app);
+    let release_dir = app_root.join("releases").join(tag);
+    if !release_dir.is_dir() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("release not found: {}", release_dir.display())));
+    }
+    refresh_bin(&app_root.join("bin"), &release_dir)?;
+    write_current_tag(root, app, tag)
 }
 
 fn write_current_tag(root: &Path, app: &str, tag: &str) -> io::Result<()> {
