@@ -31,6 +31,16 @@ pub fn history(config: &Config) -> Result<String, String> {
         .join(&config.app_name)
         .join("history.json");
     let body = history::format_recent(&path, 50).map_err(|e| e.to_string())?;
+    let body = if body.trim().is_empty() {
+        tr(
+            config.language,
+            "Nenhuma entrada no histórico.",
+            "No history entries.",
+        )
+        .to_string()
+    } else {
+        body
+    };
     Ok(format!(
         "{}\n{}",
         tr(config.language, "Histórico recente", "Recent history"),
