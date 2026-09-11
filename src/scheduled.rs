@@ -1,6 +1,7 @@
 use crate::{
+    check_v13,
     config::{self, Language},
-    plan, profiles, update_v13,
+    profiles, update_v13,
 };
 use std::{
     fs,
@@ -34,7 +35,7 @@ fn run(profile_name: &str, mode: &str) -> Result<(), String> {
     let result = if mode.eq_ignore_ascii_case("update") {
         update_v13::run(&config, &Arc::new(Mutex::new(String::new())))
     } else {
-        plan::dry_run(&config)
+        check_v13::check(&config)
     };
     let log_dir = base.join(".distronomicon").join("scheduled");
     fs::create_dir_all(&log_dir).map_err(|e| e.to_string())?;
