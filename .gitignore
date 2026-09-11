@@ -1,7 +1,6 @@
-node_modules/
-.next/
-out/
-.vercel/
-.env*
-!.env.example
-npm-debug.log*
+/target/
+*.pdb
+*.ilk
+*.tmp
+.DS_Store
+Thumbs.db
