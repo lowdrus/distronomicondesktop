@@ -47,6 +47,27 @@ pub struct Config {
     pub restart_command: String,
 }
 
+pub fn normalize_repo(value: &str) -> Result<String, String> {
+    let mut repo = value.trim().trim_end_matches('/').to_string();
+    for prefix in ["https://github.com/", "http://github.com/", "github.com/"] {
+        if let Some(rest) = repo.strip_prefix(prefix) {
+            repo = rest.to_string();
+            break;
+        }
+    }
+    if let Some(stripped) = repo.strip_suffix(".git") {
+        repo = stripped.to_string();
+    }
+    let parts = repo.split('/').collect::<Vec<_>>();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        return Err("invalid repository".into());
+    }
+    if parts.iter().any(|part| part.contains(['?', '#', '\\'])) {
+        return Err("invalid repository".into());
+    }
+    Ok(format!("{}/{}", parts[0], parts[1]))
+}
+
 pub fn validate(config: &Config, action: Action) -> Result<(), String> {
     let app = &config.app_name;
     if app.is_empty()
@@ -63,12 +84,11 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
         .into());
     }
     if matches!(action, Action::Check | Action::Update) {
-        let parts = config.repo.split('/').collect::<Vec<_>>();
-        if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        if normalize_repo(&config.repo).is_err() {
             return Err(tr(
                 config.language,
-                "Use o repositório no formato owner/repository.",
-                "Use the repository format owner/repository.",
+                "Use owner/repository ou uma URL completa do GitHub, como https://github.com/owner/repository.",
+                "Use owner/repository or a full GitHub URL such as https://github.com/owner/repository.",
             )
             .into());
         }
@@ -93,4 +113,35 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
         .into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_owner_repo() {
+        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
+    }
+
+    #[test]
+    fn normalizes_full_github_url() {
+        assert_eq!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
+    }
+
+    #[test]
+    fn normalizes_git_suffix_and_trailing_slash() {
+        assert_eq!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
+    }
+
+    #[test]
+    fn rejects_extra_path_segments() {
+        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
+    }
 }
