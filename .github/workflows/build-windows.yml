@@ -3,11 +3,12 @@ name: Windows CI and Portable Build
 on:
   push:
     branches: [main, native-windows-port]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-and-build:
@@ -50,6 +51,7 @@ jobs:
           Compress-Archive -Path portable\* -DestinationPath DistronomiconDesktop-Windows-Portable.zip -Force
           if (-not (Test-Path portable\DistronomiconDesktop.exe)) { throw 'Portable EXE was not produced' }
           if ((Get-Item portable\DistronomiconDesktop.exe).Length -le 0) { throw 'Portable EXE is empty' }
+          (Get-FileHash portable\DistronomiconDesktop.exe -Algorithm SHA256).Hash.ToLower() + '  DistronomiconDesktop.exe' | Set-Content SHA256SUMS.txt
 
       - name: Verify Windows GUI executable
         shell: pwsh
@@ -66,7 +68,21 @@ jobs:
           path: |
             portable/DistronomiconDesktop.exe
             DistronomiconDesktop-Windows-Portable.zip
+            SHA256SUMS.txt
             portable/README.md
             portable/THIRD_PARTY_NOTICES.md
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            DistronomiconDesktop-Windows-Portable.zip `
+            portable/DistronomiconDesktop.exe `
+            SHA256SUMS.txt `
+            --title "Distronomicon Desktop ${{ github.ref_name }}" `
+            --generate-notes
