@@ -19,7 +19,7 @@ Arquivos publicados em cada release:
 
 ## Status atual
 
-Versão atual do código: **v1.2.0**.
+Versão atual do código: **v1.2.1**.
 
 O executável é um aplicativo gráfico Windows x86-64 compilado com CRT estático. Para uso normal não é necessário instalar Rust, Cargo, Python, Node, WSL, Ubuntu ou Visual C++ Redistributable adicional.
 
@@ -27,11 +27,11 @@ A interface possui **PT-BR / EN**, modo **Dark / Light** com acento visual doura
 
 Os builds de desenvolvimento são reproduzíveis com `Cargo.lock` versionado; o usuário final continua recebendo apenas o `.exe`/ZIP portátil.
 
-## Paridade com o Distronomicon original
+## Paridade com o Distronomicon Linux
 
-O projeto original [`jtdowney/distronomicon`](https://github.com/jtdowney/distronomicon) é uma ferramenta Linux que consulta GitHub Releases e executa atualizações atômicas. O Distronomicon Desktop preserva esse núcleo e substitui integrações exclusivas de Linux por equivalentes apropriados para Windows.
+O projeto linux DISTRONOMICON é uma ferramenta Linux que consulta GitHub Releases e executa atualizações atômicas. O Distronomicon Desktop preserva esse núcleo e substitui integrações exclusivas de Linux por equivalentes apropriados para Windows.
 
-| Recurso | Original Linux | Desktop Windows |
+| Recurso | Distronomicon Linux | Desktop Windows |
 |---|---:|---:|
 | Consultar última release | ✅ | ✅ |
 | Atualizar para release mais recente | ✅ | ✅ |
@@ -58,7 +58,7 @@ O projeto original [`jtdowney/distronomicon`](https://github.com/jtdowney/distro
 | Dark / Light | ❌ | ✅ |
 | EXE portátil | ❌ | ✅ |
 
-### O que não deve ser copiado literalmente
+### O que não tem pariedade literalmente
 
 - `systemd/`: é específico de Linux; no Windows a evolução planejada é um agendamento nativo opcional.
 - symlinks POSIX e permissões Unix: o Desktop usa `current.txt`, releases versionadas e troca segura do diretório `bin`.
@@ -139,17 +139,19 @@ Repositório: lowdrus/watch-monitor
 
 ### 5. Repositório GitHub
 
-Use o formato:
+Agora o campo aceita tanto:
 
 ```text
 owner/repository
 ```
 
-Exemplo:
+quanto uma URL completa:
 
 ```text
-lowdrus/distronomicondesktop
+https://github.com/lowdrus/distronomicondesktop
 ```
+
+A URL é normalizada automaticamente antes da consulta à API.
 
 ### 6. Verificar
 
@@ -262,14 +264,14 @@ A interface segue este fluxo:
 │ Nome local usado para organizar a aplicação                 │
 │                                                             │
 │ Repositório GitHub                                          │
-│ [ lowdrus/watch-monitor________________________________ ]   │
+│ [ https://github.com/lowdrus/watch-monitor____________ ]    │
 │                                                             │
 │ [Verificar] [Atualizar] [Versão] [Rollback] [Diagnóstico]   │
 │                                                             │
 │ ▸ Opções avançadas                                          │
 ├──────────────────────────────────────────────────────────────┤
 │ Status                                                      │
-│ Atualização disponível: v1.1.0 → v1.2.0                    │
+│ Atualização disponível: v1.2.0 → v1.2.1                    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -287,8 +289,6 @@ Use **Versão** e **Diagnóstico** para confirmar a instalação ativa.
 
 ### Etapa 5 — recuperar
 Use **Rollback** se quiser voltar à release anterior já armazenada.
-
-> A documentação visual deve sempre acompanhar a interface real da versão publicada. Quando houver mudanças importantes de layout, este guia deve ser atualizado no mesmo commit.
 
 ## CI/CD e Releases
 
@@ -309,6 +309,12 @@ O workflow Windows executa:
 13. criação/atualização automática da GitHub Release correspondente à versão do `Cargo.toml` quando `main` fica verde.
 
 Cargo/Rust são apenas ferramentas de desenvolvimento e CI. O usuário final recebe o `.exe` portátil.
+
+## Sobre commits com erro no histórico
+
+Um commit antigo com CI vermelho **não quebra o Distronomicon Desktop atual**. Cada commit representa um estado específico do código naquele momento. O que importa para a versão distribuída é que o commit atual tenha os checks verdes e que a release tenha sido produzida a partir de um estado validado.
+
+Reescrever todo o histórico apenas para esconder commits antigos com falha não é recomendado: isso reduz rastreabilidade e pode quebrar tags, branches e referências. A abordagem correta é corrigir a causa do erro, manter o head atual verde e distribuir somente releases validadas.
 
 ## Política obrigatória de atualização
 
@@ -334,7 +340,8 @@ Sempre que o Distronomicon Desktop for alterado:
 - auto-update do próprio Distronomicon Desktop;
 - múltiplas fontes além de GitHub Releases;
 - assinaturas criptográficas adicionais (Sigstore/GPG/BLAKE3/SHA-512);
-- downloads retomáveis e mirrors.
+- downloads retomáveis e mirrors;
+- tornar a troca de `state.json` e `current.txt` ainda mais resiliente a interrupções abruptas no Windows.
 
 ## Projeto original e licença
 
