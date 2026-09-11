@@ -62,7 +62,14 @@ pub fn download(
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let offset = destination.metadata().map(|m| m.len()).unwrap_or(0);
-    let mut response = send(client, token, asset, offset)?;
+    let mut response = match send(client, token, asset, offset) {
+        Ok(response) => response,
+        Err(_) if offset > 0 => {
+            let _ = std::fs::remove_file(destination);
+            send(client, token, asset, 0)?
+        }
+        Err(error) => return Err(error),
+    };
     let resumed = offset > 0 && response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
     let mut file = if resumed {
         OpenOptions::new()
