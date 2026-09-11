@@ -29,6 +29,9 @@ pub struct Config {
     pub skip_verification: bool,
     pub retain: usize,
     pub restart_command: String,
+    pub http_timeout_secs: u64,
+    pub lock_timeout_secs: u64,
+    pub force_unlock: bool,
 }
 
 pub fn validate(config: &Config, action: Action) -> Result<(), String> {
@@ -55,6 +58,12 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
         return Err(tr(config.language,
             "Informe o padrão do checksum ou habilite 'Pular verificação'.",
             "Enter a checksum pattern or enable 'Skip verification'.").into());
+    }
+    if config.http_timeout_secs == 0 {
+        return Err(tr(config.language, "O timeout HTTP deve ser maior que zero.", "HTTP timeout must be greater than zero.").into());
+    }
+    if config.lock_timeout_secs == 0 {
+        return Err(tr(config.language, "O timeout do lock deve ser maior que zero.", "Lock timeout must be greater than zero.").into());
     }
     Ok(())
 }
