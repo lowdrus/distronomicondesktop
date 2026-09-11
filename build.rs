@@ -61,7 +61,8 @@ fn make_icon(size: u32) -> Vec<u8> {
             let outer = (s * 45 / 100).pow(2);
             let inner = (s * 30 / 100).pow(2);
             let gold = r2 <= outer && r2 >= inner;
-            let stem = x >= s * 27 / 100 && x <= s * 38 / 100 && y >= s * 24 / 100 && y <= s * 76 / 100;
+            let stem =
+                x >= s * 27 / 100 && x <= s * 38 / 100 && y >= s * 24 / 100 && y <= s * 76 / 100;
             let open_d = x > cx && r2 < inner;
             let (r, g, b, a) = if gold || stem {
                 (214u8, 166u8, 84u8, 255u8)

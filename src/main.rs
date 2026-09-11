@@ -10,11 +10,14 @@ mod state;
 mod update;
 mod verify;
 
-use config::{tr, Action, Config, Language};
+use config::{Action, Config, Language, tr};
 use eframe::egui;
 use std::{
     path::PathBuf,
-    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
     time::Duration,
 };
@@ -61,7 +64,9 @@ impl Default for DesktopApp {
             skip_verification: false,
             retain: 3,
             restart_command: String::new(),
-            status: Arc::new(Mutex::new("Pronto. Configure a aplicação e o repositório.".into())),
+            status: Arc::new(Mutex::new(
+                "Pronto. Configure a aplicação e o repositório.".into(),
+            )),
             busy: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -87,11 +92,15 @@ impl DesktopApp {
     }
 
     fn set_status(&self, text: impl Into<String>) {
-        if let Ok(mut status) = self.status.lock() { *status = text.into(); }
+        if let Ok(mut status) = self.status.lock() {
+            *status = text.into();
+        }
     }
 
     fn run(&self, action: Action) {
-        if self.busy.swap(true, Ordering::SeqCst) { return; }
+        if self.busy.swap(true, Ordering::SeqCst) {
+            return;
+        }
         let config = self.config();
         if let Err(message) = config::validate(&config, action) {
             self.set_status(message);
@@ -104,8 +113,14 @@ impl DesktopApp {
         thread::spawn(move || {
             let language = config.language;
             if matches!(action, Action::Check)
-                && let Ok(mut text) = status.lock() {
-                *text = tr(language, "Consultando releases no GitHub...", "Checking GitHub releases...").into();
+                && let Ok(mut text) = status.lock()
+            {
+                *text = tr(
+                    language,
+                    "Consultando releases no GitHub...",
+                    "Checking GitHub releases...",
+                )
+                .into();
             }
 
             let result = match action {
@@ -274,7 +289,11 @@ impl eframe::App for DesktopApp {
 }
 
 fn apply_theme(ctx: &egui::Context, dark_mode: bool) {
-    let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+    let mut visuals = if dark_mode {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
     let golden_gate = egui::Color32::from_rgb(205, 151, 77);
     visuals.selection.bg_fill = golden_gate;
     visuals.hyperlink_color = golden_gate;

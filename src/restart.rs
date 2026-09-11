@@ -8,7 +8,9 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn execute(command: &str) -> io::Result<()> {
-    if command.trim().is_empty() { return Ok(()); }
+    if command.trim().is_empty() {
+        return Ok(());
+    }
 
     let mut cmd = Command::new("cmd.exe");
     cmd.args(["/C", command]);
@@ -19,6 +21,8 @@ pub fn execute(command: &str) -> io::Result<()> {
     if status.success() {
         Ok(())
     } else {
-        Err(io::Error::other(format!("restart command failed with status {status}")))
+        Err(io::Error::other(format!(
+            "restart command failed with status {status}"
+        )))
     }
 }
