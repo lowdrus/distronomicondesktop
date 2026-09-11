@@ -7,6 +7,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+pub type PruneResult = (Vec<String>, Vec<(String, String)>);
+
 pub fn install_release(
     root: &Path,
     app: &str,
@@ -157,9 +159,9 @@ pub fn prune_old_releases(
     releases_dir: &Path,
     current_tag: &str,
     retain: usize,
-) -> io::Result<Vec<String>> {
+) -> io::Result<PruneResult> {
     if !releases_dir.exists() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), Vec::new()));
     }
     let mut entries = fs::read_dir(releases_dir)?
         .filter_map(Result::ok)
@@ -174,10 +176,15 @@ pub fn prune_old_releases(
         .collect::<Vec<_>>();
     entries.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
     let mut deleted = Vec::new();
+    let mut failed = Vec::new();
     for (tag, path, _) in entries.into_iter().skip(retain) {
-        if tag != current_tag && fs::remove_dir_all(path).is_ok() {
-            deleted.push(tag);
+        if tag == current_tag {
+            continue;
+        }
+        match fs::remove_dir_all(path) {
+            Ok(()) => deleted.push(tag),
+            Err(error) => failed.push((tag, error.to_string())),
         }
     }
-    Ok(deleted)
+    Ok((deleted, failed))
 }
