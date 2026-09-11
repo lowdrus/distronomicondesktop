@@ -1,4 +1,6 @@
-use crate::extract;
+#[path = "extract.rs"]
+mod extract;
+
 use std::{fs, io, path::{Path, PathBuf}, time::{SystemTime, UNIX_EPOCH}};
 
 pub fn install_release(root: &Path, app: &str, tag: &str, asset_name: &str, downloaded_path: &Path) -> Result<PathBuf, String> {
@@ -11,11 +13,10 @@ pub fn install_release(root: &Path, app: &str, tag: &str, asset_name: &str, down
     let staging = staging_parent.join(format!("{tag}.{suffix}"));
     fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
 
-    let archived = extract::is_supported_archive(asset_name);
-    let result = if archived {
-        extract::unpack(downloaded_path, &staging)
-    } else {
-        fs::copy(downloaded_path, staging.join(asset_name)).map(|_| ()).map_err(|e| e.to_string())
+    let result = match extract::unpack(asset_name, downloaded_path, &staging) {
+        Ok(true) => Ok(()),
+        Ok(false) => fs::copy(downloaded_path, staging.join(asset_name)).map(|_| ()).map_err(|e| e.to_string()),
+        Err(e) => Err(e),
     };
     if let Err(e) = result { let _ = fs::remove_dir_all(&staging); return Err(e); }
 
