@@ -35,7 +35,9 @@ jobs:
       - name: Tests
         run: cargo test --all-targets --all-features
 
-      - name: Build release
+      - name: Build portable release with static CRT
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
         run: cargo build --release
 
       - name: Prepare portable package
@@ -47,6 +49,15 @@ jobs:
           Copy-Item THIRD_PARTY_NOTICES.md portable\THIRD_PARTY_NOTICES.md
           Compress-Archive -Path portable\* -DestinationPath DistronomiconDesktop-Windows-Portable.zip -Force
           if (-not (Test-Path portable\DistronomiconDesktop.exe)) { throw 'Portable EXE was not produced' }
+          if ((Get-Item portable\DistronomiconDesktop.exe).Length -le 0) { throw 'Portable EXE is empty' }
+
+      - name: Verify Windows GUI executable
+        shell: pwsh
+        run: |
+          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path 'portable\DistronomiconDesktop.exe'))
+          if ($bytes.Length -lt 1024) { throw 'Executable is unexpectedly small' }
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw 'Missing Windows MZ executable signature' }
+          Write-Host "Portable Windows executable validated: $($bytes.Length) bytes"
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4
