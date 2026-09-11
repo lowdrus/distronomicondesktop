@@ -96,8 +96,5 @@ pub fn format_recent(path: &Path, limit: usize) -> io::Result<String> {
             item.timestamp_unix, item.action, item.from_version, item.to_version, item.result
         ));
     }
-    if out.is_empty() {
-        out.push_str("No history entries.\n");
-    }
     Ok(out)
 }
