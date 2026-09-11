@@ -11,6 +11,7 @@ pub struct UpdatePlan {
     pub release: release::Release,
     pub asset: release::Asset,
     pub checksum: Option<release::Asset>,
+    pub validators: release::Validators,
 }
 
 pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
@@ -18,6 +19,13 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
         .join(&config.app_name)
         .join("state.json");
     let existing = state::load(&state_path).map_err(|e| e.to_string())?;
+    let previous = existing
+        .as_ref()
+        .map(|value| release::Validators {
+            etag: value.etag.clone(),
+            last_modified: value.last_modified.clone(),
+        })
+        .unwrap_or_default();
     let client = Client::builder()
         .user_agent(concat!("DistronomiconDesktop/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(300))
@@ -30,8 +38,9 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
         token(config),
         config.allow_prerelease,
         &config.pinned_version,
-        &release::Validators::default(),
+        &previous,
     )?;
+    let validators = fetched.validators.clone();
     let release = fetched.release.ok_or_else(|| {
         tr(
             config.language,
@@ -62,6 +71,7 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
             release,
             asset,
             checksum,
+            validators,
         },
     ))
 }
@@ -86,7 +96,7 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
         "{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}",
         tr(
             config.language,
-            "DRY RUN — nenhuma alteração foi feita.",
+            "PRÉVIA — nenhuma alteração foi feita.",
             "DRY RUN — no changes were made."
         ),
         tr(config.language, "Versão atual", "Current version"),
