@@ -14,7 +14,7 @@ use config::{tr, Action, Config, Language};
 use eframe::egui;
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
+    sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -101,10 +101,9 @@ impl DesktopApp {
         let busy = Arc::clone(&self.busy);
         thread::spawn(move || {
             let language = config.language;
-            if matches!(action, Action::Check) {
-                if let Ok(mut text) = status.lock() {
-                    *text = tr(language, "Consultando releases no GitHub...", "Checking GitHub releases...").into();
-                }
+            if matches!(action, Action::Check)
+                && let Ok(mut text) = status.lock() {
+                *text = tr(language, "Consultando releases no GitHub...", "Checking GitHub releases...").into();
             }
 
             let result = match action {
