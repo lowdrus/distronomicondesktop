@@ -1,7 +1,19 @@
 [package]
 name = "distronomicon-desktop"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
-eframe = "0.33"
+eframe = { version = "0.33", default-features = false, features = ["glow", "default_fonts"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+opt-level = "z"
