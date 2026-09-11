@@ -12,7 +12,6 @@ pub struct UpdatePlan {
 pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
     let state_path = PathBuf::from(&config.state_root).join(&config.app_name).join("state.json");
     let existing = state::load(&state_path).map_err(|e| e.to_string())?;
-    let previous = existing.as_ref().map(|s| release::Validators { etag: s.etag.clone(), last_modified: s.last_modified.clone() }).unwrap_or_default();
     let client = Client::builder()
         .user_agent(concat!("DistronomiconDesktop/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(300))
@@ -24,13 +23,9 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
         token(config),
         config.allow_prerelease,
         &config.pinned_version,
-        &previous,
+        &release::Validators::default(),
     )?;
-    let release = if fetched.not_modified {
-        return Err(tr(config.language, "Nenhuma alteração detectada pelo GitHub.", "GitHub reported no changes.").into());
-    } else {
-        fetched.release.ok_or_else(|| tr(config.language, "Nenhuma release disponível.", "No release available.").to_string())?
-    };
+    let release = fetched.release.ok_or_else(|| tr(config.language, "Nenhuma release disponível.", "No release available.").to_string())?;
     let asset = asset_select::select(&release.assets, &config.asset_pattern)?.clone();
     let checksum = if config.skip_verification { None } else { Some(verify::select_asset(&release.assets, &config.checksum_pattern)?.clone()) };
     let install_root = PathBuf::from(&config.install_root);
@@ -49,7 +44,7 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
         tr(config.language, "DRY RUN — nenhuma alteração foi feita.", "DRY RUN — no changes were made."),
         tr(config.language, "Versão atual", "Current version"), current,
         tr(config.language, "Versão alvo", "Target version"), plan.release.tag_name,
-        tr(config.language, "Pin", "Pin"), pin,
+        tr(config.language, "Versão fixada", "Pinned version"), pin,
         tr(config.language, "Asset selecionado", "Selected asset"), plan.asset.name,
         tr(config.language, "Checksum", "Checksum"), checksum,
         tr(config.language, "Destino", "Destination"), PathBuf::from(&config.install_root).join(&config.app_name).display(),
