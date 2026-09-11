@@ -134,3 +134,10 @@ jobs:
               SHA256SUMS.txt `
               --clobber
           }
+
+          foreach ($legacyTag in @('v1.2.0', 'v1.2.1')) {
+            gh release view $legacyTag *> $null
+            if ($LASTEXITCODE -eq 0) {
+              gh release edit $legacyTag --title "DISTROD-$legacyTag"
+            }
+          }
