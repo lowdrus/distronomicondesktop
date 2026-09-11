@@ -9,8 +9,6 @@ pub struct Release {
     pub html_url: String,
     pub assets: Vec<Asset>,
     #[serde(default)]
-    pub prerelease: bool,
-    #[serde(default)]
     pub draft: bool,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -20,8 +18,6 @@ pub struct Release {
 pub struct Asset {
     pub name: String,
     pub url: String,
-    pub browser_download_url: String,
-    pub size: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -58,12 +54,8 @@ pub fn fetch_latest(
     if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
         request = request.header(AUTHORIZATION, format!("Bearer {}", token.trim()));
     }
-    if !previous.etag.is_empty() {
-        request = request.header(IF_NONE_MATCH, &previous.etag);
-    }
-    if !previous.last_modified.is_empty() {
-        request = request.header(IF_MODIFIED_SINCE, &previous.last_modified);
-    }
+    if !previous.etag.is_empty() { request = request.header(IF_NONE_MATCH, &previous.etag); }
+    if !previous.last_modified.is_empty() { request = request.header(IF_MODIFIED_SINCE, &previous.last_modified); }
 
     let response = request.send().map_err(|e| e.to_string())?;
     let validators = Validators {
