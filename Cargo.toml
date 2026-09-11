@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT"
 description = "Lightweight native portable Windows GUI for GitHub release management"
 repository = "https://github.com/lowdrus/distronomicondesktop"
+build = "build.rs"
 
 [dependencies]
 eframe = { version = "0.33", default-features = false, features = ["glow", "default_fonts"] }
@@ -20,6 +21,9 @@ flate2 = "1"
 bzip2 = "0.6"
 xz2 = "0.1"
 zstd = "0.13"
+
+[build-dependencies]
+winres = "0.1"
 
 [profile.release]
 lto = "thin"
