@@ -1,0 +1,41 @@
+name: Build Windows Portable
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Prepare portable artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path portable | Out-Null
+          Copy-Item target\release\distronomicon-desktop.exe portable\DistronomiconDesktop.exe
+          Copy-Item README.md portable\README.md
+
+      - name: Upload portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: DistronomiconDesktop-Windows-Portable
+          path: portable/
+          if-no-files-found: error
