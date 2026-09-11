@@ -3,6 +3,8 @@ name = "distronomicon-desktop"
 version = "1.1.0"
 edition = "2024"
 license = "MIT"
+description = "Lightweight native portable Windows GUI for GitHub release management"
+repository = "https://github.com/lowdrus/distronomicondesktop"
 
 [dependencies]
 eframe = { version = "0.33", default-features = false, features = ["glow", "default_fonts"] }
@@ -15,7 +17,7 @@ sha2 = "0.10"
 fs2 = "0.4"
 tar = "0.4"
 flate2 = "1"
-bzip2 = "0.5"
+bzip2 = "0.6"
 xz2 = "0.1"
 zstd = "0.13"
 
