@@ -31,6 +31,20 @@ jobs:
       - name: Generate Cargo.lock
         run: cargo generate-lockfile
 
+      - name: Normalize Rust formatting and lockfile
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          cargo fmt --all
+          $changes = git status --porcelain -- Cargo.lock build.rs src
+          if ($changes) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Cargo.lock build.rs src
+            git commit -m "Normalize Rust formatting and lock dependencies"
+            git push origin HEAD:main
+          }
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
@@ -60,13 +74,18 @@ jobs:
           if ((Get-Item portable\DistronomiconDesktop.exe).Length -le 0) { throw 'Portable EXE is empty' }
           (Get-FileHash portable\DistronomiconDesktop.exe -Algorithm SHA256).Hash.ToLower() + '  DistronomiconDesktop.exe' | Set-Content SHA256SUMS.txt
 
-      - name: Verify Windows GUI executable
+      - name: Verify Windows GUI executable and embedded icon
         shell: pwsh
         run: |
-          $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path 'portable\DistronomiconDesktop.exe'))
+          $exe = (Resolve-Path 'portable\DistronomiconDesktop.exe').Path
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
           if ($bytes.Length -lt 1024) { throw 'Executable is unexpectedly small' }
           if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw 'Missing Windows MZ executable signature' }
-          Write-Host "Portable Windows executable validated: $($bytes.Length) bytes"
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          if ($null -eq $icon) { throw 'Embedded Windows icon was not found' }
+          $icon.Dispose()
+          Write-Host "Portable Windows executable and icon validated: $($bytes.Length) bytes"
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4
