@@ -32,13 +32,14 @@ fn extract_zip(source: &Path, destination: &Path) -> Result<(), String> {
     let mut files = 0usize;
 
     for index in 0..archive.len() {
-        let mut entry = archive.by_index(index).map_err(|e| e.to_string())?;
+        let entry = archive.by_index(index).map_err(|e| e.to_string())?;
         let enclosed = entry.enclosed_name().ok_or_else(|| format!("unsafe archive path: {}", entry.name()))?;
         safe_relative(&enclosed)?;
         let out = destination.join(enclosed);
         if entry.is_dir() { fs::create_dir_all(&out).map_err(|e| e.to_string())?; continue; }
-        if let Some(mode) = entry.unix_mode() {
-            if mode & 0o170000 == 0o120000 { return Err(format!("symbolic links are not allowed: {}", entry.name())); }
+        if let Some(mode) = entry.unix_mode()
+            && mode & 0o170000 == 0o120000 {
+            return Err(format!("symbolic links are not allowed: {}", entry.name()));
         }
         files += 1;
         if files > MAX_FILES { return Err("archive file-count limit exceeded".into()); }
@@ -72,7 +73,7 @@ fn extract_tar(source: &Path, destination: &Path, name: &str) -> Result<(), Stri
     let mut total = 0u64;
     let mut files = 0usize;
     for item in archive.entries().map_err(|e| e.to_string())? {
-        let mut entry = item.map_err(|e| e.to_string())?;
+        let entry = item.map_err(|e| e.to_string())?;
         let path = entry.path().map_err(|e| e.to_string())?.into_owned();
         safe_relative(&path)?;
         let kind = entry.header().entry_type();
