@@ -1,6 +1,7 @@
 #[path = "extract.rs"]
 mod extract;
 
+use crate::atomic_file;
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -93,15 +94,8 @@ pub fn activate_release(root: &Path, app: &str, tag: &str) -> io::Result<()> {
 }
 
 fn write_current_tag(root: &Path, app: &str, tag: &str) -> io::Result<()> {
-    let app_root = root.join(app);
-    fs::create_dir_all(&app_root)?;
-    let current = app_root.join("current.txt");
-    let temp = app_root.join("current.tmp");
-    fs::write(&temp, tag)?;
-    if current.exists() {
-        fs::remove_file(&current)?;
-    }
-    fs::rename(temp, current)
+    let current = root.join(app).join("current.txt");
+    atomic_file::write(&current, tag.as_bytes())
 }
 
 fn sync_tree(path: &Path) -> io::Result<()> {
