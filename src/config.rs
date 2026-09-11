@@ -24,10 +24,13 @@ pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static st
 pub enum Action {
     Check,
     Update,
+    DryRun,
     Version,
     Rollback,
     Doctor,
+    History,
     Unlock,
+    SelfUpdate,
 }
 
 #[derive(Clone)]
@@ -45,6 +48,8 @@ pub struct Config {
     pub skip_verification: bool,
     pub retain: usize,
     pub restart_command: String,
+    pub health_check_command: String,
+    pub pinned_version: String,
 }
 
 pub fn normalize_repo(value: &str) -> Result<String, String> {
@@ -82,28 +87,9 @@ fn valid_windows_app_name(app: &str) -> bool {
     let stem = app.split('.').next().unwrap_or("").to_ascii_uppercase();
     !matches!(
         stem.as_str(),
-        "CON"
-            | "PRN"
-            | "AUX"
-            | "NUL"
-            | "COM1"
-            | "COM2"
-            | "COM3"
-            | "COM4"
-            | "COM5"
-            | "COM6"
-            | "COM7"
-            | "COM8"
-            | "COM9"
-            | "LPT1"
-            | "LPT2"
-            | "LPT3"
-            | "LPT4"
-            | "LPT5"
-            | "LPT6"
-            | "LPT7"
-            | "LPT8"
-            | "LPT9"
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
     )
 }
 
@@ -113,25 +99,18 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             config.language,
             "Nome da aplicação inválido para Windows. Evite caracteres < > : \" / \\ | ? *, '..', nomes reservados como CON/AUX/NUL/COM1/LPT1 e nomes terminados em ponto ou espaço.",
             "Invalid Windows application name. Avoid < > : \" / \\ | ? *, '..', reserved names such as CON/AUX/NUL/COM1/LPT1, and names ending in a dot or space.",
-        )
-        .into());
+        ).into());
     }
-    if matches!(action, Action::Check | Action::Update) {
+    if matches!(action, Action::Check | Action::Update | Action::DryRun) {
         if normalize_repo(&config.repo).is_err() {
             return Err(tr(
                 config.language,
                 "Use owner/repository ou uma URL completa do GitHub, como https://github.com/owner/repository.",
                 "Use owner/repository or a full GitHub URL such as https://github.com/owner/repository.",
-            )
-            .into());
+            ).into());
         }
         if config.github_host.is_empty() {
-            return Err(tr(
-                config.language,
-                "Informe o host da API do GitHub.",
-                "Enter the GitHub API host.",
-            )
-            .into());
+            return Err(tr(config.language, "Informe o host da API do GitHub.", "Enter the GitHub API host.").into());
         }
     }
     if matches!(action, Action::Update)
@@ -142,8 +121,7 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             config.language,
             "Informe o padrão do checksum ou habilite 'Pular verificação'.",
             "Enter a checksum pattern or enable 'Skip verification'.",
-        )
-        .into());
+        ).into());
     }
     Ok(())
 }
@@ -154,33 +132,22 @@ mod tests {
 
     #[test]
     fn normalizes_owner_repo() {
-        assert_eq!(
-            normalize_repo("lowdrus/distronomicondesktop").unwrap(),
-            "lowdrus/distronomicondesktop"
-        );
+        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
     }
 
     #[test]
     fn normalizes_full_github_url() {
-        assert_eq!(
-            normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(),
-            "lowdrus/distronomicondesktop"
-        );
+        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
     }
 
     #[test]
     fn normalizes_git_suffix_and_trailing_slash() {
-        assert_eq!(
-            normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(),
-            "lowdrus/distronomicondesktop"
-        );
+        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(), "lowdrus/distronomicondesktop");
     }
 
     #[test]
     fn rejects_extra_path_segments() {
-        assert!(
-            normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()
-        );
+        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
     }
 
     #[test]
