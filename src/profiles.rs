@@ -1,6 +1,9 @@
 use crate::config::{Config, Language};
 use serde::{Deserialize, Serialize};
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Profile {
@@ -49,17 +52,22 @@ pub fn default_path(base: &Path) -> PathBuf {
 }
 
 pub fn load(path: &Path) -> io::Result<Vec<Profile>> {
-    if !path.exists() { return Ok(Vec::new()); }
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
     let text = fs::read_to_string(path)?;
     serde_json::from_str(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 pub fn save(path: &Path, profiles: &[Profile]) -> io::Result<()> {
-    let parent = path.parent().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "profiles path has no parent"))?;
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "profiles path has no parent")
+    })?;
     fs::create_dir_all(parent)?;
     let tmp = path.with_extension("json.tmp");
     let backup = path.with_extension("json.bak");
-    let bytes = serde_json::to_vec_pretty(profiles).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes = serde_json::to_vec_pretty(profiles)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     {
         let mut file = fs::File::create(&tmp)?;
         use std::io::Write;
@@ -67,9 +75,13 @@ pub fn save(path: &Path, profiles: &[Profile]) -> io::Result<()> {
         file.sync_all()?;
     }
     let _ = fs::remove_file(&backup);
-    if path.exists() { fs::rename(path, &backup)?; }
+    if path.exists() {
+        fs::rename(path, &backup)?;
+    }
     if let Err(error) = fs::rename(&tmp, path) {
-        if backup.exists() && !path.exists() { let _ = fs::rename(&backup, path); }
+        if backup.exists() && !path.exists() {
+            let _ = fs::rename(&backup, path);
+        }
         return Err(error);
     }
     let _ = fs::remove_file(backup);
@@ -77,7 +89,10 @@ pub fn save(path: &Path, profiles: &[Profile]) -> io::Result<()> {
 }
 
 pub fn upsert(profiles: &mut Vec<Profile>, profile: Profile) {
-    if let Some(existing) = profiles.iter_mut().find(|p| p.name.eq_ignore_ascii_case(&profile.name)) {
+    if let Some(existing) = profiles
+        .iter_mut()
+        .find(|p| p.name.eq_ignore_ascii_case(&profile.name))
+    {
         *existing = profile;
     } else {
         profiles.push(profile);

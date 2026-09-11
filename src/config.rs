@@ -87,9 +87,28 @@ fn valid_windows_app_name(app: &str) -> bool {
     let stem = app.split('.').next().unwrap_or("").to_ascii_uppercase();
     !matches!(
         stem.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL"
-            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
-            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
     )
 }
 
@@ -110,7 +129,12 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             ).into());
         }
         if config.github_host.is_empty() {
-            return Err(tr(config.language, "Informe o host da API do GitHub.", "Enter the GitHub API host.").into());
+            return Err(tr(
+                config.language,
+                "Informe o host da API do GitHub.",
+                "Enter the GitHub API host.",
+            )
+            .into());
         }
     }
     if matches!(action, Action::Update)
@@ -121,7 +145,8 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             config.language,
             "Informe o padrão do checksum ou habilite 'Pular verificação'.",
             "Enter a checksum pattern or enable 'Skip verification'.",
-        ).into());
+        )
+        .into());
     }
     Ok(())
 }
@@ -132,22 +157,33 @@ mod tests {
 
     #[test]
     fn normalizes_owner_repo() {
-        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("lowdrus/distronomicondesktop").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
     fn normalizes_full_github_url() {
-        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
     fn normalizes_git_suffix_and_trailing_slash() {
-        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
     fn rejects_extra_path_segments() {
-        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
+        assert!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()
+        );
     }
 
     #[test]

@@ -1,12 +1,17 @@
 use crate::{
     check, check_v13,
     config::{self, Action, Config, Language, tr},
-    maintenance, plan, profiles::{self, Profile}, scheduler, self_update, update_v13,
+    maintenance, plan,
+    profiles::{self, Profile},
+    scheduler, self_update, update_v13,
 };
 use eframe::egui;
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
     time::Duration,
 };
@@ -40,7 +45,11 @@ pub struct DesktopApp {
 
 impl Default for DesktopApp {
     fn default() -> Self {
-        let base = std::env::current_exe().ok().and_then(|p| p.parent().map(PathBuf::from)).or_else(|| std::env::current_dir().ok()).unwrap_or_else(|| PathBuf::from("."));
+        let base = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(PathBuf::from))
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
         let profiles = profiles::load(&profiles::default_path(&base)).unwrap_or_default();
         Self {
             language: Language::PtBr,
@@ -65,7 +74,9 @@ impl Default for DesktopApp {
             pinned_version: String::new(),
             auto_mode: "check".into(),
             interval_minutes: 60,
-            status: Arc::new(Mutex::new("Pronto. Configure a aplicação e o repositório.".into())),
+            status: Arc::new(Mutex::new(
+                "Pronto. Configure a aplicação e o repositório.".into(),
+            )),
             busy: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -97,68 +108,171 @@ impl DesktopApp {
     fn profile(&self) -> Profile {
         Profile {
             name: self.profile_name.trim().to_string(),
-            app_name: self.app_name.trim().to_string(), repo: self.repo.trim().to_string(),
-            asset_pattern: self.asset_pattern.clone(), checksum_pattern: self.checksum_pattern.clone(),
-            install_root: self.install_root.clone(), state_root: self.state_root.clone(), github_host: self.github_host.clone(),
-            allow_prerelease: self.allow_prerelease, skip_verification: self.skip_verification, retain: self.retain,
-            restart_command: self.restart_command.clone(), health_check_command: self.health_check_command.clone(), pinned_version: self.pinned_version.clone(),
-            auto_mode: self.auto_mode.clone(), interval_minutes: self.interval_minutes,
+            app_name: self.app_name.trim().to_string(),
+            repo: self.repo.trim().to_string(),
+            asset_pattern: self.asset_pattern.clone(),
+            checksum_pattern: self.checksum_pattern.clone(),
+            install_root: self.install_root.clone(),
+            state_root: self.state_root.clone(),
+            github_host: self.github_host.clone(),
+            allow_prerelease: self.allow_prerelease,
+            skip_verification: self.skip_verification,
+            retain: self.retain,
+            restart_command: self.restart_command.clone(),
+            health_check_command: self.health_check_command.clone(),
+            pinned_version: self.pinned_version.clone(),
+            auto_mode: self.auto_mode.clone(),
+            interval_minutes: self.interval_minutes,
         }
     }
 
     fn apply_profile(&mut self, p: &Profile) {
-        self.profile_name = p.name.clone(); self.app_name = p.app_name.clone(); self.repo = p.repo.clone();
-        self.asset_pattern = p.asset_pattern.clone(); self.checksum_pattern = p.checksum_pattern.clone();
-        self.install_root = p.install_root.clone(); self.state_root = p.state_root.clone(); self.github_host = p.github_host.clone();
-        self.allow_prerelease = p.allow_prerelease; self.skip_verification = p.skip_verification; self.retain = p.retain;
-        self.restart_command = p.restart_command.clone(); self.health_check_command = p.health_check_command.clone(); self.pinned_version = p.pinned_version.clone();
-        self.auto_mode = if p.auto_mode.is_empty() { "check".into() } else { p.auto_mode.clone() };
+        self.profile_name = p.name.clone();
+        self.app_name = p.app_name.clone();
+        self.repo = p.repo.clone();
+        self.asset_pattern = p.asset_pattern.clone();
+        self.checksum_pattern = p.checksum_pattern.clone();
+        self.install_root = p.install_root.clone();
+        self.state_root = p.state_root.clone();
+        self.github_host = p.github_host.clone();
+        self.allow_prerelease = p.allow_prerelease;
+        self.skip_verification = p.skip_verification;
+        self.retain = p.retain;
+        self.restart_command = p.restart_command.clone();
+        self.health_check_command = p.health_check_command.clone();
+        self.pinned_version = p.pinned_version.clone();
+        self.auto_mode = if p.auto_mode.is_empty() {
+            "check".into()
+        } else {
+            p.auto_mode.clone()
+        };
         self.interval_minutes = p.interval_minutes.max(1);
     }
 
-    fn set_status(&self, text: impl Into<String>) { if let Ok(mut status) = self.status.lock() { *status = text.into(); } }
+    fn set_status(&self, text: impl Into<String>) {
+        if let Ok(mut status) = self.status.lock() {
+            *status = text.into();
+        }
+    }
 
     fn save_profile(&mut self) {
-        if self.profile_name.trim().is_empty() { self.set_status(tr(self.language, "Informe um nome para o perfil.", "Enter a profile name.")); return; }
+        if self.profile_name.trim().is_empty() {
+            self.set_status(tr(
+                self.language,
+                "Informe um nome para o perfil.",
+                "Enter a profile name.",
+            ));
+            return;
+        }
         let profile = self.profile();
         profiles::upsert(&mut self.profiles, profile.clone());
         match profiles::save(&profiles::default_path(&self.base), &self.profiles) {
-            Ok(()) => { self.selected_profile = profile.name; self.set_status(tr(self.language, "Perfil salvo.", "Profile saved.")); }
-            Err(e) => self.set_status(format!("{}: {e}", tr(self.language, "Erro ao salvar perfil", "Failed to save profile"))),
+            Ok(()) => {
+                self.selected_profile = profile.name;
+                self.set_status(tr(self.language, "Perfil salvo.", "Profile saved."));
+            }
+            Err(e) => self.set_status(format!(
+                "{}: {e}",
+                tr(
+                    self.language,
+                    "Erro ao salvar perfil",
+                    "Failed to save profile"
+                )
+            )),
         }
     }
 
     fn delete_profile(&mut self) {
-        let name = if self.selected_profile.is_empty() { self.profile_name.clone() } else { self.selected_profile.clone() };
+        let name = if self.selected_profile.is_empty() {
+            self.profile_name.clone()
+        } else {
+            self.selected_profile.clone()
+        };
         profiles::remove(&mut self.profiles, &name);
         match profiles::save(&profiles::default_path(&self.base), &self.profiles) {
-            Ok(()) => { self.selected_profile.clear(); self.set_status(tr(self.language, "Perfil removido.", "Profile removed.")); }
-            Err(e) => self.set_status(format!("{}: {e}", tr(self.language, "Erro ao remover perfil", "Failed to delete profile"))),
+            Ok(()) => {
+                self.selected_profile.clear();
+                self.set_status(tr(self.language, "Perfil removido.", "Profile removed."));
+            }
+            Err(e) => self.set_status(format!(
+                "{}: {e}",
+                tr(
+                    self.language,
+                    "Erro ao remover perfil",
+                    "Failed to delete profile"
+                )
+            )),
         }
     }
 
     fn schedule(&self) {
-        if self.profile_name.trim().is_empty() { self.set_status(tr(self.language, "Salve o perfil antes de agendar.", "Save the profile before scheduling.")); return; }
-        match std::env::current_exe().map_err(|e| e.to_string()).and_then(|exe| scheduler::install(&self.profile_name, &exe, &self.auto_mode, self.interval_minutes).map_err(|e| e.to_string())) {
-            Ok(()) => self.set_status(tr(self.language, "Automação do Windows ativada.", "Windows automation enabled.")),
-            Err(e) => self.set_status(format!("{}: {e}", tr(self.language, "Falha ao criar agendamento", "Failed to create schedule"))),
+        if self.profile_name.trim().is_empty() {
+            self.set_status(tr(
+                self.language,
+                "Salve o perfil antes de agendar.",
+                "Save the profile before scheduling.",
+            ));
+            return;
+        }
+        match std::env::current_exe()
+            .map_err(|e| e.to_string())
+            .and_then(|exe| {
+                scheduler::install(
+                    &self.profile_name,
+                    &exe,
+                    &self.auto_mode,
+                    self.interval_minutes,
+                )
+                .map_err(|e| e.to_string())
+            }) {
+            Ok(()) => self.set_status(tr(
+                self.language,
+                "Automação do Windows ativada.",
+                "Windows automation enabled.",
+            )),
+            Err(e) => self.set_status(format!(
+                "{}: {e}",
+                tr(
+                    self.language,
+                    "Falha ao criar agendamento",
+                    "Failed to create schedule"
+                )
+            )),
         }
     }
 
     fn unschedule(&self) {
         match scheduler::uninstall(&self.profile_name) {
-            Ok(()) => self.set_status(tr(self.language, "Automação removida.", "Automation removed.")),
-            Err(e) => self.set_status(format!("{}: {e}", tr(self.language, "Falha ao remover agendamento", "Failed to remove schedule"))),
+            Ok(()) => self.set_status(tr(
+                self.language,
+                "Automação removida.",
+                "Automation removed.",
+            )),
+            Err(e) => self.set_status(format!(
+                "{}: {e}",
+                tr(
+                    self.language,
+                    "Falha ao remover agendamento",
+                    "Failed to remove schedule"
+                )
+            )),
         }
     }
 
     fn run(&self, action: Action) {
-        if self.busy.swap(true, Ordering::SeqCst) { return; }
+        if self.busy.swap(true, Ordering::SeqCst) {
+            return;
+        }
         let config = self.config();
         if !matches!(action, Action::SelfUpdate) {
-            if let Err(message) = config::validate(&config, action) { self.set_status(message); self.busy.store(false, Ordering::SeqCst); return; }
+            if let Err(message) = config::validate(&config, action) {
+                self.set_status(message);
+                self.busy.store(false, Ordering::SeqCst);
+                return;
+            }
         }
-        let status = Arc::clone(&self.status); let busy = Arc::clone(&self.busy);
+        let status = Arc::clone(&self.status);
+        let busy = Arc::clone(&self.busy);
         thread::spawn(move || {
             let language = config.language;
             let result = match action {
@@ -172,7 +286,12 @@ impl DesktopApp {
                 Action::Unlock => check::unlock(&config),
                 Action::SelfUpdate => self_update::run(),
             };
-            if let Ok(mut text) = status.lock() { *text = match result { Ok(message) => message, Err(error) => format!("{}: {error}", tr(language, "Erro", "Error")) }; }
+            if let Ok(mut text) = status.lock() {
+                *text = match result {
+                    Ok(message) => message,
+                    Err(error) => format!("{}: {error}", tr(language, "Erro", "Error")),
+                };
+            }
             busy.store(false, Ordering::SeqCst);
         });
     }
@@ -181,7 +300,8 @@ impl DesktopApp {
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         apply_theme(ctx, self.dark_mode);
-        let language = self.language; let is_busy = self.busy.load(Ordering::SeqCst);
+        let language = self.language;
+        let is_busy = self.busy.load(Ordering::SeqCst);
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Distronomicon Desktop");
@@ -263,7 +383,13 @@ impl eframe::App for DesktopApp {
 }
 
 fn apply_theme(ctx: &egui::Context, dark_mode: bool) {
-    let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+    let mut visuals = if dark_mode {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
     let golden_gate = egui::Color32::from_rgb(205, 151, 77);
-    visuals.selection.bg_fill = golden_gate; visuals.hyperlink_color = golden_gate; ctx.set_visuals(visuals);
+    visuals.selection.bg_fill = golden_gate;
+    visuals.hyperlink_color = golden_gate;
+    ctx.set_visuals(visuals);
 }

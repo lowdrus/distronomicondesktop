@@ -1,4 +1,7 @@
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 pub fn write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let parent = path
