@@ -5,20 +5,21 @@ use reqwest::blocking::Client;
 use serde::Deserialize;
 use std::{fs, io::Write, path::PathBuf, sync::{Arc, Mutex}, thread, time::Duration};
 
-#[derive(Deserialize)]
-struct Release {
-    tag_name: String,
-    html_url: String,
-    assets: Vec<Asset>,
+#[derive(Clone, Copy, PartialEq)]
+enum Language { PtBr, En }
+
+impl Language {
+    fn label(self) -> &'static str { match self { Self::PtBr => "PT-BR", Self::En => "EN" } }
 }
 
 #[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-}
+struct Release { tag_name: String, html_url: String, assets: Vec<Asset> }
+
+#[derive(Deserialize)]
+struct Asset { name: String, browser_download_url: String }
 
 struct DesktopApp {
+    language: Language,
     repo: String,
     asset_filter: String,
     install_dir: String,
@@ -29,6 +30,7 @@ impl Default for DesktopApp {
     fn default() -> Self {
         let default_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")).join("apps");
         Self {
+            language: Language::PtBr,
             repo: "owner/repository".into(),
             asset_filter: ".zip".into(),
             install_dir: default_dir.display().to_string(),
@@ -38,6 +40,10 @@ impl Default for DesktopApp {
 }
 
 impl DesktopApp {
+    fn t(&self, pt: &'static str, en: &'static str) -> &'static str {
+        match self.language { Language::PtBr => pt, Language::En => en }
+    }
+
     fn set_status(&self, text: impl Into<String>) {
         if let Ok(mut s) = self.status.lock() { *s = text.into(); }
     }
@@ -47,15 +53,21 @@ impl DesktopApp {
         let filter = self.asset_filter.trim().to_string();
         let install_dir = self.install_dir.trim().to_string();
         let status = Arc::clone(&self.status);
+        let language = self.language;
 
         if !repo.contains('/') {
-            self.set_status("Use o formato owner/repository.");
+            self.set_status(self.t("Use o formato owner/repository.", "Use the owner/repository format."));
             return;
         }
 
         thread::spawn(move || {
             let result = (|| -> Result<String, String> {
-                if let Ok(mut s) = status.lock() { *s = "Consultando a release mais recente no GitHub...".into(); }
+                if let Ok(mut s) = status.lock() {
+                    *s = match language {
+                        Language::PtBr => "Consultando a release mais recente no GitHub...".into(),
+                        Language::En => "Checking the latest GitHub release...".into(),
+                    };
+                }
 
                 let client = Client::builder()
                     .user_agent("DistronomiconDesktop/1.0")
@@ -71,14 +83,25 @@ impl DesktopApp {
                 let asset = release.assets.iter().find(|a| filter.is_empty() || a.name.to_lowercase().contains(&filter.to_lowercase()));
 
                 if !do_update {
-                    return Ok(match asset {
-                        Some(a) => format!("Última versão: {}\nArquivo: {}\n{}", release.tag_name, a.name, release.html_url),
-                        None => format!("Última versão: {}\nNenhum arquivo corresponde ao filtro '{}'.\n{}", release.tag_name, filter, release.html_url),
+                    return Ok(match (language, asset) {
+                        (Language::PtBr, Some(a)) => format!("Última versão: {}\nArquivo: {}\n{}", release.tag_name, a.name, release.html_url),
+                        (Language::En, Some(a)) => format!("Latest version: {}\nAsset: {}\n{}", release.tag_name, a.name, release.html_url),
+                        (Language::PtBr, None) => format!("Última versão: {}\nNenhum arquivo corresponde ao filtro '{}'.\n{}", release.tag_name, filter, release.html_url),
+                        (Language::En, None) => format!("Latest version: {}\nNo asset matches filter '{}'.\n{}", release.tag_name, filter, release.html_url),
                     });
                 }
 
-                let asset = asset.ok_or_else(|| format!("Nenhum arquivo da release corresponde ao filtro '{}'.", filter))?;
-                if let Ok(mut s) = status.lock() { *s = format!("Baixando {}...", asset.name); }
+                let asset = asset.ok_or_else(|| match language {
+                    Language::PtBr => format!("Nenhum arquivo da release corresponde ao filtro '{}'.", filter),
+                    Language::En => format!("No release asset matches filter '{}'.", filter),
+                })?;
+
+                if let Ok(mut s) = status.lock() {
+                    *s = match language {
+                        Language::PtBr => format!("Baixando {}...", asset.name),
+                        Language::En => format!("Downloading {}...", asset.name),
+                    };
+                }
 
                 let bytes = client.get(&asset.browser_download_url).send().map_err(|e| e.to_string())?
                     .error_for_status().map_err(|e| e.to_string())?
@@ -96,14 +119,23 @@ impl DesktopApp {
                     let extract_dir = base.join(release.tag_name.trim_start_matches('v'));
                     fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
                     archive.extract(&extract_dir).map_err(|e| e.to_string())?;
-                    Ok(format!("Atualização concluída.\nVersão: {}\nInstalada em: {}", release.tag_name, extract_dir.display()))
+                    Ok(match language {
+                        Language::PtBr => format!("Atualização concluída.\nVersão: {}\nInstalada em: {}", release.tag_name, extract_dir.display()),
+                        Language::En => format!("Update completed.\nVersion: {}\nInstalled at: {}", release.tag_name, extract_dir.display()),
+                    })
                 } else {
-                    Ok(format!("Download concluído.\nVersão: {}\nArquivo salvo em: {}", release.tag_name, target.display()))
+                    Ok(match language {
+                        Language::PtBr => format!("Download concluído.\nVersão: {}\nArquivo salvo em: {}", release.tag_name, target.display()),
+                        Language::En => format!("Download completed.\nVersion: {}\nSaved to: {}", release.tag_name, target.display()),
+                    })
                 }
             })();
 
             if let Ok(mut s) = status.lock() {
-                *s = match result { Ok(v) => v, Err(e) => format!("Erro: {e}") };
+                *s = match result {
+                    Ok(v) => v,
+                    Err(e) => match language { Language::PtBr => format!("Erro: {e}"), Language::En => format!("Error: {e}") },
+                };
             }
         });
     }
@@ -112,31 +144,41 @@ impl DesktopApp {
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Distronomicon Desktop");
-            ui.label("Atualizador portátil nativo para Windows. Sem terminal, WSL ou instalação.");
+            ui.horizontal(|ui| {
+                ui.heading("Distronomicon Desktop");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    egui::ComboBox::from_id_salt("language")
+                        .selected_text(self.language.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.language, Language::PtBr, "PT-BR");
+                            ui.selectable_value(&mut self.language, Language::En, "EN");
+                        });
+                });
+            });
+            ui.label(self.t("Atualizador portátil nativo para Windows. Sem terminal, WSL ou instalação.", "Native portable updater for Windows. No terminal, WSL, or installation required."));
             ui.add_space(14.0);
 
-            ui.label("Repositório GitHub");
+            ui.label(self.t("Repositório GitHub", "GitHub repository"));
             ui.text_edit_singleline(&mut self.repo);
             ui.add_space(8.0);
 
-            ui.label("Filtro do arquivo da release");
+            ui.label(self.t("Filtro do arquivo da release", "Release asset filter"));
             ui.text_edit_singleline(&mut self.asset_filter);
-            ui.small("Ex.: .zip, windows, win64, x64");
+            ui.small(self.t("Ex.: .zip, windows, win64, x64", "Examples: .zip, windows, win64, x64"));
             ui.add_space(8.0);
 
-            ui.label("Pasta de destino");
+            ui.label(self.t("Pasta de destino", "Destination folder"));
             ui.text_edit_singleline(&mut self.install_dir);
             ui.add_space(14.0);
 
             ui.horizontal(|ui| {
-                if ui.button("Verificar atualização").clicked() { self.run_check(false); }
-                if ui.button("Baixar / Atualizar").clicked() { self.run_check(true); }
+                if ui.button(self.t("Verificar atualização", "Check for update")).clicked() { self.run_check(false); }
+                if ui.button(self.t("Baixar / Atualizar", "Download / Update")).clicked() { self.run_check(true); }
             });
 
             ui.add_space(16.0);
             ui.separator();
-            ui.label("Status");
+            ui.label(self.t("Status", "Status"));
             let mut text = self.status.lock().map(|s| s.clone()).unwrap_or_default();
             ui.add(egui::TextEdit::multiline(&mut text)
                 .desired_rows(12)
@@ -144,7 +186,7 @@ impl eframe::App for DesktopApp {
                 .font(egui::TextStyle::Monospace)
                 .interactive(false));
             ui.add_space(8.0);
-            ui.small("Funciona com releases públicas do GitHub e salva tudo dentro da pasta escolhida.");
+            ui.small(self.t("Funciona com releases públicas do GitHub e salva tudo dentro da pasta escolhida.", "Works with public GitHub releases and saves everything in the selected folder."));
         });
         ctx.request_repaint_after(Duration::from_millis(250));
     }
