@@ -28,6 +28,9 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
@@ -73,6 +76,7 @@ jobs:
             portable/DistronomiconDesktop.exe
             DistronomiconDesktop-Windows-Portable.zip
             SHA256SUMS.txt
+            Cargo.lock
             portable/README.md
             portable/THIRD_PARTY_NOTICES.md
           if-no-files-found: error
