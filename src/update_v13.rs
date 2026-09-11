@@ -107,7 +107,8 @@ pub fn run(config: &Config, status: &Arc<Mutex<String>>) -> Result<String, Strin
         );
         if let Err(health_error) = restart::execute(&config.health_check_command) {
             if !old.is_empty() && old != plan.release.tag_name {
-                let rollback_result = install::activate_release(&install_root, &config.app_name, &old);
+                let rollback_result =
+                    install::activate_release(&install_root, &config.app_name, &old);
                 let mut previous_state = state::load(&state_path)
                     .map_err(|e| e.to_string())?
                     .unwrap_or_default();
