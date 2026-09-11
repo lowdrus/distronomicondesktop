@@ -11,7 +11,7 @@ pub fn select_asset<'a>(assets: &'a [Asset], pattern: &str) -> Result<&'a Asset,
         .ok_or_else(|| format!("No release asset matches pattern: {pattern}"))
 }
 
-fn request_asset<'a>(client: &'a Client, token: Option<&str>, asset: &Asset) -> reqwest::blocking::RequestBuilder {
+fn request_asset(client: &Client, token: Option<&str>, asset: &Asset) -> reqwest::blocking::RequestBuilder {
     let mut request = client.get(&asset.url).header(ACCEPT, "application/octet-stream");
     if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
         request = request.header(AUTHORIZATION, format!("Bearer {}", token.trim()));
@@ -74,7 +74,7 @@ fn parse_checksum(text: &str, wanted: &str) -> Result<String, String> {
         if line.len() < 66 { continue; }
         let (hash, rest) = line.split_at(64);
         if !hash.chars().all(|c| c.is_ascii_hexdigit()) { continue; }
-        let name = rest.trim_start_matches([' ', '*']).trim();
+        let name = rest.trim_start_matches(|c| c == ' ' || c == '*').trim();
         if name == wanted { return Ok(hash.to_string()); }
     }
     Err(format!("Checksum entry not found for {wanted}"))
