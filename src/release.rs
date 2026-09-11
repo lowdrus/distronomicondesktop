@@ -16,6 +16,7 @@ pub struct Release {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Asset {
     pub name: String,
+    pub url: String,
     pub browser_download_url: String,
     pub size: u64,
 }
@@ -34,18 +35,23 @@ pub struct FetchResult {
 
 pub fn fetch_latest(
     client: &Client,
+    host: &str,
     repo: &str,
     token: Option<&str>,
     allow_prerelease: bool,
     previous: &Validators,
 ) -> Result<FetchResult, String> {
+    let host = host.trim_end_matches('/');
     let url = if allow_prerelease {
-        format!("https://api.github.com/repos/{repo}/releases?per_page=20")
+        format!("{host}/repos/{repo}/releases?per_page=20")
     } else {
-        format!("https://api.github.com/repos/{repo}/releases/latest")
+        format!("{host}/repos/{repo}/releases/latest")
     };
 
-    let mut request = client.get(url).header(ACCEPT, "application/vnd.github+json");
+    let mut request = client
+        .get(url)
+        .header(ACCEPT, "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28");
     if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
         request = request.header(AUTHORIZATION, format!("Bearer {}", token.trim()));
     }
