@@ -21,6 +21,7 @@ use std::{
 
 struct DesktopApp {
     language: Language,
+    dark_mode: bool,
     app_name: String,
     repo: String,
     asset_pattern: String,
@@ -47,7 +48,8 @@ impl Default for DesktopApp {
 
         Self {
             language: Language::PtBr,
-            app_name: "myapp".into(),
+            dark_mode: true,
+            app_name: "meu-app".into(),
             repo: "owner/repository".into(),
             asset_pattern: r"(?i).*\.(zip|exe)$".into(),
             checksum_pattern: r"(?i)^(SHA256SUMS|checksums?(\.txt)?|.*sha256.*)$".into(),
@@ -128,6 +130,7 @@ impl DesktopApp {
 
 impl eframe::App for DesktopApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        apply_theme(ctx, self.dark_mode);
         let language = self.language;
         let is_busy = self.busy.load(Ordering::SeqCst);
 
@@ -135,6 +138,11 @@ impl eframe::App for DesktopApp {
             ui.horizontal(|ui| {
                 ui.heading("Distronomicon Desktop");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.checkbox(&mut self.dark_mode, "◐").on_hover_text(tr(
+                        language,
+                        "Alternar modo claro/escuro",
+                        "Toggle light/dark mode",
+                    ));
                     egui::ComboBox::from_id_salt("language")
                         .selected_text(self.language.label())
                         .show_ui(ui, |ui| {
@@ -154,6 +162,11 @@ impl eframe::App for DesktopApp {
 
             ui.label(tr(language, "Aplicação", "Application"));
             ui.text_edit_singleline(&mut self.app_name);
+            ui.small(tr(
+                language,
+                "Nome local que você escolhe para identificar o programa gerenciado. Ex.: meu-app, servidor, cinetwitch.",
+                "A local name you choose to identify the managed program. Examples: my-app, server, cinetwitch.",
+            ));
             ui.add_space(8.0);
 
             ui.label(tr(language, "Repositório GitHub", "GitHub repository"));
@@ -166,7 +179,7 @@ impl eframe::App for DesktopApp {
                     if ui.button(tr(language, "Verificar", "Check")).clicked() { self.run(Action::Check); }
                     if ui.button(tr(language, "Atualizar", "Update")).clicked() { self.run(Action::Update); }
                     if ui.button(tr(language, "Versão", "Version")).clicked() { self.run(Action::Version); }
-                    if ui.button(tr(language, "Rollback", "Rollback")).clicked() { self.run(Action::Rollback); }
+                    if ui.button("Rollback").clicked() { self.run(Action::Rollback); }
                     if ui.button(tr(language, "Diagnóstico", "Doctor")).clicked() { self.run(Action::Doctor); }
                 });
             });
@@ -238,6 +251,11 @@ impl eframe::App for DesktopApp {
                             self.run(Action::Unlock);
                         }
                     });
+                    ui.small(tr(
+                        language,
+                        "Use somente se uma atualização anterior foi interrompida e deixou o lock preso. Não é necessário no uso normal.",
+                        "Use only if a previous update was interrupted and left the lock stuck. It is not needed during normal use.",
+                    ));
                 });
 
             ui.add_space(14.0);
@@ -255,11 +273,19 @@ impl eframe::App for DesktopApp {
     }
 }
 
+fn apply_theme(ctx: &egui::Context, dark_mode: bool) {
+    let mut visuals = if dark_mode { egui::Visuals::dark() } else { egui::Visuals::light() };
+    let golden_gate = egui::Color32::from_rgb(205, 151, 77);
+    visuals.selection.bg_fill = golden_gate;
+    visuals.hyperlink_color = golden_gate;
+    ctx.set_visuals(visuals);
+}
+
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([720.0, 680.0])
-            .with_min_inner_size([580.0, 500.0])
+            .with_inner_size([720.0, 700.0])
+            .with_min_inner_size([580.0, 520.0])
             .with_title("Distronomicon Desktop"),
         ..Default::default()
     };
@@ -267,9 +293,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Distronomicon Desktop",
         options,
-        Box::new(|cc| {
-            cc.egui_ctx.set_visuals(egui::Visuals::dark());
-            Ok(Box::<DesktopApp>::default())
-        }),
+        Box::new(|_cc| Ok(Box::<DesktopApp>::default())),
     )
 }
