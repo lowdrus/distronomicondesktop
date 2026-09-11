@@ -74,10 +74,12 @@ impl Default for DesktopApp {
 
 impl DesktopApp {
     fn config(&self) -> Config {
+        let repo_input = self.repo.trim();
+        let repo = config::normalize_repo(repo_input).unwrap_or_else(|_| repo_input.to_string());
         Config {
             language: self.language,
             app_name: self.app_name.trim().to_string(),
-            repo: self.repo.trim().to_string(),
+            repo,
             asset_pattern: self.asset_pattern.trim().to_string(),
             checksum_pattern: self.checksum_pattern.trim().to_string(),
             install_root: self.install_root.trim().to_string(),
@@ -186,7 +188,11 @@ impl eframe::App for DesktopApp {
 
             ui.label(tr(language, "Repositório GitHub", "GitHub repository"));
             ui.text_edit_singleline(&mut self.repo);
-            ui.small("owner/repository");
+            ui.small(tr(
+                language,
+                "Aceita owner/repository ou URL completa do GitHub.",
+                "Accepts owner/repository or a full GitHub URL.",
+            ));
             ui.add_space(14.0);
 
             ui.add_enabled_ui(!is_busy, |ui| {
