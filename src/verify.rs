@@ -31,7 +31,10 @@ fn send_with_retry(client: &Client, token: Option<&str>, asset: &Asset) -> Resul
             Ok(response) => last_error = format!("HTTP {} for {}", response.status(), asset.name),
             Err(error) => last_error = error.to_string(),
         }
-        if attempt < 3 { thread::sleep(delay); delay = (delay * 2).min(Duration::from_secs(4)); }
+        if attempt < 3 {
+            thread::sleep(delay);
+            delay = (delay * 2).min(Duration::from_secs(4));
+        }
     }
     Err(last_error)
 }
@@ -67,7 +70,7 @@ fn parse_checksum(text: &str, wanted: &str) -> Result<String, String> {
         if line.is_empty() || line.starts_with('#') || line.len() < 66 { continue; }
         let (hash, rest) = line.split_at(64);
         if !hash.chars().all(|c| c.is_ascii_hexdigit()) { continue; }
-        let name = rest.trim_start_matches(|c| c == ' ' || c == '*').trim();
+        let name = rest.trim_start_matches([' ', '*']).trim();
         if name == wanted { return Ok(hash.to_string()); }
     }
     Err(format!("Checksum entry not found for {wanted}"))
