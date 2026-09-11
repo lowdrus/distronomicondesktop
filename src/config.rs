@@ -2,9 +2,7 @@
 pub enum Language { PtBr, En }
 
 impl Language {
-    pub fn label(self) -> &'static str {
-        match self { Self::PtBr => "PT-BR", Self::En => "EN" }
-    }
+    pub fn label(self) -> &'static str { match self { Self::PtBr => "PT-BR", Self::En => "EN" } }
 }
 
 pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static str {
@@ -29,9 +27,6 @@ pub struct Config {
     pub skip_verification: bool,
     pub retain: usize,
     pub restart_command: String,
-    pub http_timeout_secs: u64,
-    pub lock_timeout_secs: u64,
-    pub force_unlock: bool,
 }
 
 pub fn validate(config: &Config, action: Action) -> Result<(), String> {
@@ -41,7 +36,6 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             "Nome da aplicação inválido. Não use /, \\, .. ou caracteres nulos.",
             "Invalid application name. Do not use /, \\, .., or null characters.").into());
     }
-
     if matches!(action, Action::Check | Action::Update) {
         let parts = config.repo.split('/').collect::<Vec<_>>();
         if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
@@ -53,17 +47,10 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             return Err(tr(config.language, "Informe o host da API do GitHub.", "Enter the GitHub API host.").into());
         }
     }
-
     if matches!(action, Action::Update) && !config.skip_verification && config.checksum_pattern.is_empty() {
         return Err(tr(config.language,
             "Informe o padrão do checksum ou habilite 'Pular verificação'.",
             "Enter a checksum pattern or enable 'Skip verification'.").into());
-    }
-    if config.http_timeout_secs == 0 {
-        return Err(tr(config.language, "O timeout HTTP deve ser maior que zero.", "HTTP timeout must be greater than zero.").into());
-    }
-    if config.lock_timeout_secs == 0 {
-        return Err(tr(config.language, "O timeout do lock deve ser maior que zero.", "Lock timeout must be greater than zero.").into());
     }
     Ok(())
 }
