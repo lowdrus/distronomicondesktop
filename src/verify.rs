@@ -1,5 +1,6 @@
 use crate::release::Asset;
 use reqwest::blocking::Client;
+use reqwest::header::{ACCEPT, AUTHORIZATION};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 
@@ -9,6 +10,17 @@ pub fn select_asset<'a>(assets: &'a [Asset], pattern: &str) -> Result<&'a Asset,
         .ok_or_else(|| format!("No release asset matches pattern: {pattern}"))
 }
 
+pub fn download_asset(client: &Client, token: Option<&str>, asset: &Asset) -> Result<Vec<u8>, String> {
+    let mut request = client.get(&asset.url).header(ACCEPT, "application/octet-stream");
+    if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
+        request = request.header(AUTHORIZATION, format!("Bearer {}", token.trim()));
+    }
+    let response = request.send().map_err(|e| e.to_string())?
+        .error_for_status().map_err(|e| e.to_string())?;
+    let bytes = response.bytes().map_err(|e| e.to_string())?;
+    Ok(bytes.to_vec())
+}
+
 pub fn verify_sha256(
     client: &Client,
     token: Option<&str>,
@@ -16,13 +28,9 @@ pub fn verify_sha256(
     bytes: &[u8],
     checksum_asset: &Asset,
 ) -> Result<(), String> {
-    let mut request = client.get(&checksum_asset.browser_download_url);
-    if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
-        request = request.bearer_auth(token.trim());
-    }
-    let text = request.send().map_err(|e| e.to_string())?
-        .error_for_status().map_err(|e| e.to_string())?
-        .text().map_err(|e| e.to_string())?;
+    let checksum_bytes = download_asset(client, token, checksum_asset)?;
+    let text = String::from_utf8(checksum_bytes)
+        .map_err(|_| "checksum asset is not UTF-8 text".to_string())?;
 
     let expected = parse_checksum(&text, asset_name)?;
     let mut hasher = Sha256::new();
