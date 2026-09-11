@@ -12,6 +12,7 @@ pub fn unpack(asset_name: &str, source: &Path, destination: &Path) -> Result<boo
     let name = asset_name.to_ascii_lowercase();
     if name.ends_with(".zip") {
         extract_zip(source, destination)?;
+        strip_single_root(destination)?;
         return Ok(true);
     }
     if name.ends_with(".tar.gz")
@@ -23,6 +24,7 @@ pub fn unpack(asset_name: &str, source: &Path, destination: &Path) -> Result<boo
         || name.ends_with(".tar.zst")
     {
         extract_tar(source, destination, &name)?;
+        strip_single_root(destination)?;
         return Ok(true);
     }
     Ok(false)
@@ -35,6 +37,25 @@ fn safe_relative(path: &Path) -> Result<(), String> {
     if path.components().any(|c| matches!(c, Component::ParentDir)) {
         return Err("archive paths containing '..' are not allowed".into());
     }
+    Ok(())
+}
+
+fn strip_single_root(destination: &Path) -> Result<(), String> {
+    let entries = fs::read_dir(destination)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    if entries.len() != 1 || !entries[0].file_type().map_err(|e| e.to_string())?.is_dir() {
+        return Ok(());
+    }
+
+    let root = entries[0].path();
+    for child in fs::read_dir(&root).map_err(|e| e.to_string())? {
+        let child = child.map_err(|e| e.to_string())?;
+        let target = destination.join(child.file_name());
+        fs::rename(child.path(), target).map_err(|e| e.to_string())?;
+    }
+    fs::remove_dir(&root).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -147,4 +168,24 @@ fn extract_tar(source: &Path, destination: &Path, name: &str) -> Result<(), Stri
         output.sync_all().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_single_root;
+    use std::fs;
+
+    #[test]
+    fn strips_one_root_directory() {
+        let base = std::env::temp_dir().join(format!("distronomicon-extract-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("package-v1");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("app.exe"), b"test").unwrap();
+
+        strip_single_root(&base).unwrap();
+        assert!(base.join("app.exe").is_file());
+        assert!(!root.exists());
+        let _ = fs::remove_dir_all(base);
+    }
 }
