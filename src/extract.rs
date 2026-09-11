@@ -177,7 +177,8 @@ mod tests {
 
     #[test]
     fn strips_one_root_directory() {
-        let base = std::env::temp_dir().join(format!("distronomicon-extract-{}", std::process::id()));
+        let base =
+            std::env::temp_dir().join(format!("distronomicon-extract-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
         let root = base.join("package-v1");
         fs::create_dir_all(&root).unwrap();
