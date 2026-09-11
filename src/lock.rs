@@ -15,7 +15,12 @@ impl Drop for LockGuard {
 
 pub fn acquire(path: &Path, timeout: Duration) -> io::Result<LockGuard> {
     if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
-    let file = OpenOptions::new().create(true).read(true).write(true).open(path)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(path)?;
     let start = Instant::now();
     let mut delay = Duration::from_millis(100);
 
