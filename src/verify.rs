@@ -3,6 +3,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use regex::Regex;
 use sha2::{Digest, Sha256};
+use std::{fs::File, io::{self, Read}, path::Path};
 
 pub fn select_asset<'a>(assets: &'a [Asset], pattern: &str) -> Result<&'a Asset, String> {
     let regex = Regex::new(pattern).map_err(|e| format!("Invalid asset pattern: {e}"))?;
@@ -10,31 +11,53 @@ pub fn select_asset<'a>(assets: &'a [Asset], pattern: &str) -> Result<&'a Asset,
         .ok_or_else(|| format!("No release asset matches pattern: {pattern}"))
 }
 
-pub fn download_asset(client: &Client, token: Option<&str>, asset: &Asset) -> Result<Vec<u8>, String> {
+fn request_asset<'a>(client: &'a Client, token: Option<&str>, asset: &Asset) -> reqwest::blocking::RequestBuilder {
     let mut request = client.get(&asset.url).header(ACCEPT, "application/octet-stream");
     if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
         request = request.header(AUTHORIZATION, format!("Bearer {}", token.trim()));
     }
-    let response = request.send().map_err(|e| e.to_string())?
+    request
+}
+
+pub fn download_asset_to_file(
+    client: &Client,
+    token: Option<&str>,
+    asset: &Asset,
+    destination: &Path,
+) -> Result<(), String> {
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let mut response = request_asset(client, token, asset)
+        .send().map_err(|e| e.to_string())?
         .error_for_status().map_err(|e| e.to_string())?;
-    let bytes = response.bytes().map_err(|e| e.to_string())?;
-    Ok(bytes.to_vec())
+    let mut file = File::create(destination).map_err(|e| e.to_string())?;
+    io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn verify_sha256(
     client: &Client,
     token: Option<&str>,
     asset_name: &str,
-    bytes: &[u8],
+    downloaded_path: &Path,
     checksum_asset: &Asset,
 ) -> Result<(), String> {
-    let checksum_bytes = download_asset(client, token, checksum_asset)?;
-    let text = String::from_utf8(checksum_bytes)
-        .map_err(|_| "checksum asset is not UTF-8 text".to_string())?;
+    let text = request_asset(client, token, checksum_asset)
+        .send().map_err(|e| e.to_string())?
+        .error_for_status().map_err(|e| e.to_string())?
+        .text().map_err(|e| e.to_string())?;
 
     let expected = parse_checksum(&text, asset_name)?;
+    let mut file = File::open(downloaded_path).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
-    hasher.update(bytes);
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
+        if n == 0 { break; }
+        hasher.update(&buffer[..n]);
+    }
     let actual = format!("{:x}", hasher.finalize());
 
     if actual.eq_ignore_ascii_case(&expected) {
