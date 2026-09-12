@@ -140,19 +140,59 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
             "DRY RUN — no changes were made.",
         )
         .to_string(),
-        format!("{}: {current}", tr(config.language, "Versão atual", "Current version")),
-        format!("{}: {}", tr(config.language, "Versão alvo", "Target version"), plan.release.tag_name),
-        format!("{}: {}", tr(config.language, "Canal", "Channel"), config.channel),
-        format!("{}: {architecture}", tr(config.language, "Arquitetura", "Architecture")),
-        format!("{}: {pin}", tr(config.language, "Versão fixada", "Pinned version")),
-        format!("{}: {}", tr(config.language, "Asset selecionado", "Selected asset"), plan.asset.name),
-        format!("{}: {}", tr(config.language, "Tamanho do asset", "Asset size"), features_v14::format_size(plan.asset.size)),
-        format!("{}: {}", tr(config.language, "Espaço estimado necessário", "Estimated required space"), features_v14::format_size(required)),
-        format!("{}: {checksum}", tr(config.language, "Checksum", "Checksum")),
+        format!(
+            "{}: {current}",
+            tr(config.language, "Versão atual", "Current version")
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Versão alvo", "Target version"),
+            plan.release.tag_name
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Canal", "Channel"),
+            config.channel
+        ),
+        format!(
+            "{}: {architecture}",
+            tr(config.language, "Arquitetura", "Architecture")
+        ),
+        format!(
+            "{}: {pin}",
+            tr(config.language, "Versão fixada", "Pinned version")
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Asset selecionado", "Selected asset"),
+            plan.asset.name
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Tamanho do asset", "Asset size"),
+            features_v14::format_size(plan.asset.size)
+        ),
+        format!(
+            "{}: {}",
+            tr(
+                config.language,
+                "Espaço estimado necessário",
+                "Estimated required space"
+            ),
+            features_v14::format_size(required)
+        ),
+        format!(
+            "{}: {checksum}",
+            tr(config.language, "Checksum", "Checksum")
+        ),
         format!(
             "{}: {}",
             tr(config.language, "Possível downgrade", "Possible downgrade"),
-            if downgrade { tr(config.language, "sim", "yes") } else { tr(config.language, "não", "no") }
+            if downgrade {
+                tr(config.language, "sim", "yes")
+            } else {
+                tr(config.language, "não", "no")
+            }
         ),
         format!(
             "{}: {prune_text}",
@@ -165,12 +205,24 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
         format!(
             "{}: {}",
             tr(config.language, "Retenção por dias", "Retention by days"),
-            if config.retention_days == 0 { tr(config.language, "desativada", "disabled").to_string() } else { format!("{}", config.retention_days) }
+            if config.retention_days == 0 {
+                tr(config.language, "desativada", "disabled").to_string()
+            } else {
+                format!("{}", config.retention_days)
+            }
         ),
         format!(
             "{}: {}",
-            tr(config.language, "Limite de espaço das releases", "Release disk limit"),
-            if config.max_disk_mb == 0 { tr(config.language, "desativado", "disabled").to_string() } else { format!("{} MB", config.max_disk_mb) }
+            tr(
+                config.language,
+                "Limite de espaço das releases",
+                "Release disk limit"
+            ),
+            if config.max_disk_mb == 0 {
+                tr(config.language, "desativado", "disabled").to_string()
+            } else {
+                format!("{} MB", config.max_disk_mb)
+            }
         ),
     ];
     lines.push(action.to_string());
