@@ -1,3 +1,4 @@
+use crate::atomic_file;
 use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
@@ -41,15 +42,32 @@ impl HistoryEntry {
 }
 
 pub fn load(path: &Path) -> io::Result<Vec<HistoryEntry>> {
-    if !path.exists() {
-        return Ok(Vec::new());
+    if path.exists() {
+        match read_history(path) {
+            Ok(entries) => return Ok(entries),
+            Err(primary_error) => {
+                let backup = atomic_file::backup_path(path);
+                if backup.exists() {
+                    return read_history(&backup);
+                }
+                return Err(primary_error);
+            }
+        }
     }
+    let backup = atomic_file::backup_path(path);
+    if backup.exists() {
+        return read_history(&backup);
+    }
+    Ok(Vec::new())
+}
+
+fn read_history(path: &Path) -> io::Result<Vec<HistoryEntry>> {
     let text = fs::read_to_string(path)?;
     serde_json::from_str(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 pub fn append(path: &Path, entry: HistoryEntry) -> io::Result<()> {
-    let mut items = load(path).unwrap_or_default();
+    let mut items = load(path)?;
     items.push(entry);
     if items.len() > 500 {
         items.drain(0..items.len() - 500);
@@ -58,32 +76,9 @@ pub fn append(path: &Path, entry: HistoryEntry) -> io::Result<()> {
 }
 
 fn save(path: &Path, items: &[HistoryEntry]) -> io::Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "history path has no parent"))?;
-    fs::create_dir_all(parent)?;
-    let tmp = path.with_extension("json.tmp");
-    let backup = path.with_extension("json.bak");
     let bytes = serde_json::to_vec_pretty(items)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    {
-        use std::io::Write;
-        let mut file = fs::File::create(&tmp)?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-    }
-    let _ = fs::remove_file(&backup);
-    if path.exists() {
-        fs::rename(path, &backup)?;
-    }
-    if let Err(error) = fs::rename(&tmp, path) {
-        if backup.exists() && !path.exists() {
-            let _ = fs::rename(&backup, path);
-        }
-        return Err(error);
-    }
-    let _ = fs::remove_file(backup);
-    Ok(())
+    atomic_file::write(path, &bytes)
 }
 
 pub fn format_recent(path: &Path, limit: usize) -> io::Result<String> {

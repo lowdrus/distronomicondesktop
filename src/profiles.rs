@@ -1,4 +1,7 @@
-use crate::config::{Config, Language};
+use crate::{
+    atomic_file,
+    config::{Config, Language},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
@@ -52,40 +55,34 @@ pub fn default_path(base: &Path) -> PathBuf {
 }
 
 pub fn load(path: &Path) -> io::Result<Vec<Profile>> {
-    if !path.exists() {
-        return Ok(Vec::new());
+    if path.exists() {
+        match read_profiles(path) {
+            Ok(profiles) => return Ok(profiles),
+            Err(primary_error) => {
+                let backup = atomic_file::backup_path(path);
+                if backup.exists() {
+                    return read_profiles(&backup);
+                }
+                return Err(primary_error);
+            }
+        }
     }
+    let backup = atomic_file::backup_path(path);
+    if backup.exists() {
+        return read_profiles(&backup);
+    }
+    Ok(Vec::new())
+}
+
+fn read_profiles(path: &Path) -> io::Result<Vec<Profile>> {
     let text = fs::read_to_string(path)?;
     serde_json::from_str(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 pub fn save(path: &Path, profiles: &[Profile]) -> io::Result<()> {
-    let parent = path.parent().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "profiles path has no parent")
-    })?;
-    fs::create_dir_all(parent)?;
-    let tmp = path.with_extension("json.tmp");
-    let backup = path.with_extension("json.bak");
     let bytes = serde_json::to_vec_pretty(profiles)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    {
-        let mut file = fs::File::create(&tmp)?;
-        use std::io::Write;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-    }
-    let _ = fs::remove_file(&backup);
-    if path.exists() {
-        fs::rename(path, &backup)?;
-    }
-    if let Err(error) = fs::rename(&tmp, path) {
-        if backup.exists() && !path.exists() {
-            let _ = fs::rename(&backup, path);
-        }
-        return Err(error);
-    }
-    let _ = fs::remove_file(backup);
-    Ok(())
+    atomic_file::write(path, &bytes)
 }
 
 pub fn upsert(profiles: &mut Vec<Profile>, profile: Profile) {

@@ -47,8 +47,6 @@ pub fn fetch_selected(
     if pin.is_empty() || pin.eq_ignore_ascii_case("latest") {
         let first = fetch_latest(client, host, repo, token, allow_prerelease, previous)?;
         if first.not_modified {
-            // Planning/updating needs the full release assets even after a conditional 304.
-            // Re-fetch without validators while keeping the network-efficient first request.
             fetch_latest(
                 client,
                 host,
@@ -61,7 +59,18 @@ pub fn fetch_selected(
             Ok(first)
         }
     } else {
-        fetch_tag(client, host, repo, token, pin)
+        match fetch_tag(client, host, repo, token, pin) {
+            Ok(result) => Ok(result),
+            Err(first_error) if !pin.starts_with(['v', 'V']) => {
+                let prefixed = format!("v{pin}");
+                fetch_tag(client, host, repo, token, &prefixed).map_err(|second_error| {
+                    format!(
+                        "Could not find pinned release '{pin}' or '{prefixed}': {first_error}; {second_error}"
+                    )
+                })
+            }
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -73,7 +82,7 @@ pub fn fetch_tag(
     tag: &str,
 ) -> Result<FetchResult, String> {
     let host = host.trim_end_matches('/');
-    let url = format!("{host}/repos/{repo}/releases/tags/{tag}");
+    let url = format!("{host}/repos/{repo}/releases/tags/{}", encode_tag(tag));
     let mut request = client
         .get(url)
         .header(ACCEPT, "application/vnd.github+json")
@@ -162,4 +171,26 @@ pub fn fetch_latest(
         validators,
         not_modified: false,
     })
+}
+
+fn encode_tag(tag: &str) -> String {
+    let mut encoded = String::with_capacity(tag.len());
+    for byte in tag.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
+#[cfg(test)]
+mod tests {
+    use super::encode_tag;
+
+    #[test]
+    fn encodes_slashes_in_tag_names() {
+        assert_eq!(encode_tag("release/1.3"), "release%2F1.3");
+    }
 }
