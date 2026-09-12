@@ -19,7 +19,6 @@ mod scheduled;
 mod scheduler;
 mod self_update;
 mod state;
-mod update;
 mod update_v13;
 mod verify;
 
