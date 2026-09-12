@@ -192,7 +192,7 @@ pub fn run(
             let result = if !old.is_empty() {
                 "health-check-failed; automatic-rollback-attempted"
             } else {
-                "health-check-failed; no-previous-release"
+                "health-check-failed; first-install-deactivated"
             };
             let _ = history::append(
                 &history_path,
@@ -302,6 +302,7 @@ pub fn run(
 
 fn rollback_after_failure(config: &Config, install_root: &Path, state_path: &Path, old: &str) {
     if old.is_empty() {
+        let _ = install::deactivate_release(install_root, &config.app_name);
         return;
     }
     if install::activate_release(install_root, &config.app_name, old).is_ok() {
