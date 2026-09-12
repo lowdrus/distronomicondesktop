@@ -5,7 +5,7 @@ use crate::{
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::{
-    cmp::Ordering,
+    cmp::{Ordering, Reverse},
     fs, io,
     path::{Path, PathBuf},
     process::Command,
@@ -281,7 +281,7 @@ fn authenticode_status(path: &Path) -> Result<String, String> {
         if !output.status.success() {
             return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
         }
-        return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
     #[cfg(not(windows))]
     {
@@ -366,6 +366,31 @@ pub fn current_release_path(config: &Config) -> Result<PathBuf, String> {
     Ok(root.join(&config.app_name).join("releases").join(tag))
 }
 
+pub fn current_release_url(config: &Config) -> Result<String, String> {
+    let root = PathBuf::from(&config.install_root);
+    let tag = install::current_tag(&root, &config.app_name)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No active release".to_string())?;
+    let repo = crate::config::normalize_repo(&config.repo)
+        .map_err(|_| "Invalid GitHub repository".to_string())?;
+    Ok(format!(
+        "https://github.com/{repo}/releases/tag/{}",
+        encode_path_segment(&tag)
+    ))
+}
+
+fn encode_path_segment(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
 pub fn prune_policy(config: &Config, current_tag: &str) -> Result<Vec<String>, String> {
     let releases_dir = PathBuf::from(&config.install_root)
         .join(&config.app_name)
@@ -389,7 +414,7 @@ pub fn prune_policy(config: &Config, current_tag: &str) -> Result<Vec<String>, S
             )
         })
         .collect::<Vec<_>>();
-    entries.sort_by(|a, b| b.2.cmp(&a.2));
+    entries.sort_by_key(|entry| Reverse(entry.2));
     let now = SystemTime::now();
     let mut deleted = Vec::new();
     let mut keep = Vec::new();
@@ -407,7 +432,7 @@ pub fn prune_policy(config: &Config, current_tag: &str) -> Result<Vec<String>, S
     }
     if config.max_disk_mb > 0 {
         let limit = config.max_disk_mb.saturating_mul(1024 * 1024);
-        keep.sort_by(|a, b| a.2.cmp(&b.2));
+        keep.sort_by_key(|entry| entry.2);
         let mut total = keep.iter().map(|e| dir_size(&e.1)).sum::<u64>();
         for (tag, path, _) in keep {
             if total <= limit {
