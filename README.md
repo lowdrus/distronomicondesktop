@@ -1,6 +1,6 @@
 # Distronomicon Desktop
 
-Aplicativo gráfico nativo e portátil para Windows que gerencia GitHub Releases com verificação SHA-256, instalação versionada, rollback, diagnóstico, retenção, prereleases, GitHub Enterprise, perfis, automação e atualização sem terminal ou WSL.
+Gerenciador gráfico nativo e portátil para Windows que monitora GitHub Releases, baixa e valida atualizações por SHA-256, instala releases de forma versionada e segura, oferece rollback, diagnóstico, retenção, prereleases, GitHub Enterprise, perfis, automação, histórico, health check e gerenciamento sem terminal ou WSL.
 
 [![Windows CI](https://github.com/lowdrus/distronomicondesktop/actions/workflows/build-windows.yml/badge.svg)](https://github.com/lowdrus/distronomicondesktop/actions/workflows/build-windows.yml)
 [![Latest Release](https://img.shields.io/github/v/release/lowdrus/distronomicondesktop?display_name=tag)](https://github.com/lowdrus/distronomicondesktop/releases/latest)
@@ -11,9 +11,9 @@ Aplicativo gráfico nativo e portátil para Windows que gerencia GitHub Releases
 - **[Todas Versões - Releases](https://github.com/lowdrus/distronomicondesktop/releases)**
 - **[DistronomiconDesktop BUILDS DE CI](https://github.com/lowdrus/distronomicondesktop/actions/workflows/build-windows.yml)**
 
-As novas releases usam título curto no GitHub: `DISTROD-vX.Y.Z`.
+As releases usam título curto no GitHub: `DISTROD-vX.Y.Z`.
 
-Arquivos publicados:
+Arquivos publicados em cada release:
 
 - `DistronomiconDesktop-Windows-Portable.zip`
 - `DistronomiconDesktop.exe`
@@ -21,35 +21,37 @@ Arquivos publicados:
 
 ## Status
 
-Versão em desenvolvimento nesta branch: **v1.3.0**.
+Versão desta revisão: **v1.3.1**.
+
+A v1.3.0 introduziu as 10 grandes melhorias funcionais. A v1.3.1 é uma revisão de estabilidade: reforça recuperação de metadados, perfis e histórico, melhora Dry Run e version pinning e incorpora o screenshot real na documentação.
 
 O executável final é Windows x86-64 com CRT estático. O usuário não precisa instalar Rust, Cargo, Python, Node, WSL, Ubuntu ou Visual C++ Redistributable adicional.
 
 A interface possui **PT-BR / EN**, tema **Dark / Light** com acento dourado inspirado no macOS Golden Gate e ícone próprio no `.exe`.
 
-## Exemplo visual
+## Screenshot real
 
-![Distronomicon Desktop](assets/distronomicon-desktop-example.svg)
+![Distronomicon Desktop](assets/distronomicon-desktop-example.png)
 
-O SVG acima reproduz o fluxo da interface e é versionado junto da documentação para não depender de imagem externa.
+A imagem acima é um screenshot real da aplicação Windows. O arquivo SVG continua no repositório apenas como ilustração vetorial auxiliar; o PNG é a referência visual principal.
 
 ## O que o Distronomicon Desktop faz
 
-O Distronomicon Desktop consulta releases de qualquer repositório GitHub válido, escolhe o asset adequado, baixa com retry e retomada, verifica SHA-256, extrai com proteções de segurança, instala em diretórios versionados, ativa a nova versão, mantém versões anteriores conforme retenção, permite rollback e registra estado/histórico.
+O Distronomicon Desktop consulta releases de qualquer repositório GitHub válido, escolhe o asset mais adequado ao Windows/x64 dentro do filtro configurado, baixa com retry e retomada, verifica SHA-256, extrai com proteções de segurança, instala em diretórios versionados, ativa a nova versão, mantém versões anteriores conforme a retenção, permite rollback e registra estado e histórico.
 
-O campo **Repositório GitHub** aceita tanto:
+O campo **Repositório GitHub** aceita:
 
 ```text
 owner/repository
 ```
 
-quanto:
+ou uma URL completa:
 
 ```text
 https://github.com/owner/repository
 ```
 
-Também aceita `github.com/owner/repository`, barra final e sufixo `.git`. A entrada é normalizada internamente para `owner/repository` antes da chamada à API. Não há vínculo com `lowdrus`; qualquer repositório GitHub válido pode ser usado.
+Também aceita `github.com/owner/repository`, barra final e sufixo `.git`. A entrada é normalizada internamente para `owner/repository` antes da chamada à API. Não há vínculo com `lowdrus`: qualquer repositório GitHub válido pode ser usado.
 
 ## Função por função
 
@@ -68,7 +70,9 @@ Esse nome cria uma área separada em `managed/<aplicacao>/` e `.distronomicon/<a
 
 ### Perfil
 
-Salva persistentemente as configurações de uma aplicação. Você pode cadastrar vários programas e alternar entre eles pelo ComboBox sem redigitar repositório, Regex, pastas, retenção, pinning, health check ou automação. Tokens GitHub não são gravados no perfil.
+Salva persistentemente as configurações de uma aplicação. É possível cadastrar vários programas e alternar entre eles pelo ComboBox sem redigitar repositório, Regex, pastas, retenção, pinning, health check ou automação. Tokens GitHub não são gravados no perfil.
+
+Na v1.3.1, `profiles.json` também usa recuperação pelo arquivo de backup se o principal estiver ausente ou corrompido.
 
 ### Verificar / Check
 
@@ -83,7 +87,9 @@ Mostra sem alterar o disco:
 - versão fixada, se houver;
 - asset selecionado;
 - arquivo de checksum;
-- destino da instalação.
+- destino da instalação;
+- versões que a política de retenção removerá depois da atualização;
+- se nenhuma instalação será necessária porque a versão alvo já está ativa.
 
 ### Atualizar / Update
 
@@ -97,7 +103,7 @@ Executa o fluxo completo:
 6. extrai para staging;
 7. promove a release para `releases/<tag>`;
 8. troca `bin` com rollback de filesystem em caso de falha;
-9. atualiza `current.txt` e `state.json` de forma reforçada;
+9. atualiza `current.txt` e `state.json` com persistência reforçada;
 10. executa restart opcional;
 11. executa health check opcional;
 12. volta automaticamente à versão anterior se o health check falhar;
@@ -106,7 +112,7 @@ Executa o fluxo completo:
 
 ### Versão / Version
 
-Mostra a release atualmente ativa.
+Mostra a release atualmente ativa. Se `current.txt` estiver ausente ou inválido, a v1.3.1 tenta recuperar a tag pelo `current.txt.bak` e valida se a release correspondente existe.
 
 ### Reverter / Rollback
 
@@ -118,7 +124,7 @@ Verifica coerência entre `current.txt`, `state.json`, release ativa, diretório
 
 ### Histórico / History
 
-Exibe as operações recentes, incluindo update/rollback, versão anterior/nova, asset, SHA-256 e resultado.
+Exibe as operações recentes, incluindo update/rollback, versão anterior/nova, asset, SHA-256 e resultado. Na v1.3.1, `history.json` também recupera o backup quando necessário.
 
 ### Forçar desbloqueio / Force unlock
 
@@ -126,49 +132,51 @@ O lock impede duas atualizações simultâneas na mesma aplicação. Use **Forç
 
 ### PT-BR / EN
 
-O seletor troca a interface entre Português do Brasil e Inglês. Mensagens operacionais novas da v1.3 também usam o mesmo sistema de tradução.
+O seletor troca a interface entre Português do Brasil e Inglês. Botões, rótulos e mensagens operacionais da v1.3 usam o mesmo sistema bilíngue.
 
 ### Dark / Light
 
 O controle `◐` alterna os temas mantendo a identidade visual dourada.
 
-## As 10 melhorias da v1.3
+## As 10 melhorias implementadas na v1.3
 
 ### 1. Perfis persistentes
 
-Cada perfil armazena aplicação, repositório, Regex, diretórios, prerelease, retenção, restart, health check, pin de versão e automação. Os perfis ficam próximos ao executável em `.distronomicon/profiles.json`, com escrita protegida por temporário/backup.
+Cada perfil armazena aplicação, repositório, Regex, diretórios, prerelease, retenção, restart, health check, pin de versão e automação. Os perfis ficam próximos ao executável em `.distronomicon/profiles.json` e usam escrita protegida por temporário, `sync_all`, backup e rename.
 
 ### 2. Auto Check / Auto Update Windows
 
-A GUI pode registrar uma tarefa no **Windows Task Scheduler** sem abrir terminal visível. O perfil define:
+A GUI registra uma tarefa no **Windows Task Scheduler** sem abrir terminal visível. O perfil pode executar:
 
-- `check`: apenas verifica;
-- `update`: verifica e atualiza;
-- intervalo em minutos.
+- `check`: apenas verificar;
+- `update`: verificar e atualizar;
+- intervalo configurável em minutos.
 
 A execução agendada reutiliza o mesmo `.exe` em modo silencioso e grava log em `.distronomicon/scheduled/`.
 
 ### 3. Dry Run
 
-O botão **Prévia** permite revisar exatamente o que será usado antes da atualização.
+O botão **Prévia** permite revisar o plano antes da atualização e, na v1.3.1, também mostra o efeito previsto da retenção.
 
 ### 4. Health Check + rollback automático
 
-Depois da atualização, um comando opcional de verificação pode validar o aplicativo. Se falhar, o Desktop reativa a versão anterior, restaura o estado e executa novamente o comando de restart quando configurado.
+Depois da atualização, um comando opcional pode validar o aplicativo. Se falhar, o Desktop reativa a versão anterior, restaura o estado e executa novamente o restart quando configurado.
 
 ### 5. Version Pinning
 
-O perfil pode permanecer em `latest` ou apontar para uma tag específica, por exemplo:
+O perfil pode permanecer em `latest` ou apontar para uma tag específica. A v1.3.1 aceita, por exemplo:
 
 ```text
-v2.4.1
+1.3.0
+v1.3.0
+release/1.3
 ```
 
-Nesse modo a release é consultada diretamente por tag.
+Quando o usuário informa `1.3.0`, o Desktop tenta também `v1.3.0`. Tags com caracteres como `/` são codificadas corretamente para a API.
 
 ### 6. Histórico de updates/rollbacks
 
-Cada aplicação mantém `history.json`, limitado às entradas mais recentes, com versão anterior/nova, asset, SHA-256, resultado e timestamp.
+Cada aplicação mantém `history.json`, limitado às entradas mais recentes, com versão anterior/nova, asset, SHA-256, resultado e timestamp. O arquivo possui recuperação via backup.
 
 ### 7. Seleção inteligente de asset
 
@@ -179,19 +187,19 @@ Depois de aplicar a Regex configurada, os candidatos recebem prioridade para nom
 - `.zip` / `.exe`;
 - `portable`.
 
-Assets Linux/macOS e arquiteturas incompatíveis recebem penalidade. Uma Regex explícita do usuário continua tendo prioridade como filtro.
+Assets Linux/macOS e arquiteturas incompatíveis recebem penalidade. Uma Regex explícita do usuário continua sendo o filtro principal.
 
 ### 8. Auto-update do Distronomicon Desktop
 
-O aplicativo consulta a própria release, baixa `DistronomiconDesktop.exe`, valida `SHA256SUMS.txt`, prepara a troca e reinicia sem janela de terminal visível. O mecanismo também impede downgrade automático para uma versão mais antiga.
+O aplicativo consulta a própria release, baixa `DistronomiconDesktop.exe`, valida `SHA256SUMS.txt`, prepara a troca e reinicia sem janela de terminal visível. O mecanismo impede downgrade automático para uma versão mais antiga.
 
 ### 9. Downloads retomáveis
 
-Arquivos parciais são retomados com HTTP `Range` quando o servidor devolve `206 Partial Content`; se o servidor não aceitar retomada, o download recomeça do zero com segurança.
+Arquivos parciais são retomados com HTTP `Range` quando o servidor devolve `206 Partial Content`; se a retomada não for aceita, o download recomeça do zero com segurança.
 
 ### 10. Persistência reforçada
 
-`state.json` e `current.txt` usam escrita temporária + `sync_all` + backup + rename, com restauração do backup se a substituição falhar. `state.json` também pode recuperar o backup caso o arquivo principal esteja ausente ou corrompido.
+`state.json`, `current.txt`, perfis e histórico usam escrita temporária + `sync_all` + backup + rename. A leitura tenta o backup quando o arquivo principal estiver ausente/corrompido. A tag recuperada de `current.txt.bak` só é aceita se a release correspondente realmente existir.
 
 ## Paridade com o Distronomicon Linux
 
@@ -215,6 +223,7 @@ O projeto linux DISTRONOMICON é uma ferramenta Linux que consulta GitHub Releas
 | Restart | ✅ | ✅ |
 | ZIP/TAR comprimidos | ✅ | ✅ |
 | Proteções de extração | ✅ | ✅ |
+| Persistência com recuperação | ✅ | ✅ |
 | Version pinning | — | ✅ |
 | Download retomável | — | ✅ |
 | Perfis | — | ✅ |
@@ -260,10 +269,12 @@ managed/
     current.txt.bak
 .distronomicon/
   profiles.json
+  profiles.json.bak
   <app>/
     state.json
     state.json.bak
     history.json
+    history.json.bak
     lock
     downloads/
   scheduled/
@@ -279,7 +290,7 @@ managed/
 5. Informe **Aplicação**.
 6. Cole `owner/repository` ou a URL completa do GitHub.
 7. Clique **Verificar**.
-8. Use **Prévia** para revisar a atualização.
+8. Use **Prévia** para revisar a atualização e o efeito da retenção.
 9. Clique **Atualizar**.
 10. Confirme em **Versão** e **Diagnóstico**.
 11. Se necessário, use **Reverter**.
@@ -308,22 +319,25 @@ A release publicada recebe título curto `DISTROD-vX.Y.Z`.
 
 Commits históricos com check vermelho representam estados antigos e não quebram a release atual. O critério de distribuição é: head atual verde, testes/build verdes e release produzida desse estado. Reescrever todo o histórico apenas para esconder falhas antigas não é recomendado.
 
-## Roadmap além da v1.3
+## Próximas ideias
 
-Ideias coerentes para próximas versões:
+Além das 10 melhorias já implementadas, fazem sentido para versões futuras:
 
 - notificações nativas do Windows;
 - assinatura Authenticode/Sigstore quando aplicável;
 - retenção também por espaço em disco ou dias;
 - canais Stable/Beta/Nightly por perfil;
 - exportar/importar perfis;
-- botão para abrir pasta atual e página da release;
-- botão cancelar download;
-- estimativa de espaço necessário;
+- abrir pasta da versão ativa e página da release;
+- botão de cancelamento de download;
+- estimativa de espaço necessário antes do update;
 - proteção contra downgrade manual acidental;
 - release notes dentro da GUI;
 - mirrors/fontes adicionais além do GitHub;
-- ARM64 quando houver demanda.
+- ARM64 quando houver demanda;
+- teste de conectividade antes de operações longas;
+- reconstrução guiada de estado no Doctor;
+- notificações de update concluído/falhou na central do Windows.
 
 ## Projeto de Linux Para Nativo
 
