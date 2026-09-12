@@ -8,8 +8,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub type PruneResult = (Vec<String>, Vec<(String, String)>);
-
 pub fn install_release(
     root: &Path,
     app: &str,
@@ -104,6 +102,23 @@ pub fn activate_release(root: &Path, app: &str, tag: &str) -> io::Result<()> {
     write_current_tag(root, app, tag)
 }
 
+pub fn deactivate_release(root: &Path, app: &str) -> io::Result<()> {
+    let app_root = root.join(app);
+    let bin = app_root.join("bin");
+    let current = app_root.join("current.txt");
+    let current_backup = atomic_file::backup_path(&current);
+    if bin.exists() {
+        fs::remove_dir_all(bin)?;
+    }
+    if current.exists() {
+        fs::remove_file(current)?;
+    }
+    if current_backup.exists() {
+        fs::remove_file(current_backup)?;
+    }
+    Ok(())
+}
+
 fn write_current_tag(root: &Path, app: &str, tag: &str) -> io::Result<()> {
     let current = root.join(app).join("current.txt");
     atomic_file::write(&current, tag.as_bytes())
@@ -181,30 +196,6 @@ pub fn preview_prune_after_install(
         .skip(retain)
         .filter_map(|(tag, _, _)| (tag != incoming_tag).then_some(tag))
         .collect())
-}
-
-pub fn prune_old_releases(
-    releases_dir: &Path,
-    current_tag: &str,
-    retain: usize,
-) -> io::Result<PruneResult> {
-    if !releases_dir.exists() {
-        return Ok((Vec::new(), Vec::new()));
-    }
-    let mut entries = release_entries(releases_dir)?;
-    entries.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
-    let mut deleted = Vec::new();
-    let mut failed = Vec::new();
-    for (tag, path, _) in entries.into_iter().skip(retain) {
-        if tag == current_tag {
-            continue;
-        }
-        match fs::remove_dir_all(path) {
-            Ok(()) => deleted.push(tag),
-            Err(error) => failed.push((tag, error.to_string())),
-        }
-    }
-    Ok((deleted, failed))
 }
 
 fn release_entries(releases_dir: &Path) -> io::Result<Vec<(String, PathBuf, SystemTime)>> {
