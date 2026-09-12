@@ -69,6 +69,16 @@ impl Default for Profile {
 }
 
 impl Profile {
+    pub fn effective_channel(&self) -> String {
+        if self.allow_prerelease && (self.channel.is_empty() || self.channel == "stable") {
+            "nightly".into()
+        } else if self.channel.is_empty() {
+            "stable".into()
+        } else {
+            self.channel.clone()
+        }
+    }
+
     pub fn to_config(&self, language: Language, github_token: String) -> Config {
         Config {
             language,
@@ -86,11 +96,7 @@ impl Profile {
             restart_command: self.restart_command.clone(),
             health_check_command: self.health_check_command.clone(),
             pinned_version: self.pinned_version.clone(),
-            channel: if self.channel.is_empty() {
-                "stable".into()
-            } else {
-                self.channel.clone()
-            },
+            channel: self.effective_channel(),
             architecture: if self.architecture.is_empty() {
                 "auto".into()
             } else {
@@ -168,4 +174,29 @@ pub fn upsert(profiles: &mut Vec<Profile>, profile: Profile) {
 
 pub fn remove(profiles: &mut Vec<Profile>, name: &str) {
     profiles.retain(|p| !p.name.eq_ignore_ascii_case(name));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrates_legacy_prerelease_profile_to_nightly() {
+        let profile = Profile {
+            allow_prerelease: true,
+            channel: "stable".into(),
+            ..Profile::default()
+        };
+        assert_eq!(profile.effective_channel(), "nightly");
+    }
+
+    #[test]
+    fn keeps_explicit_beta_channel() {
+        let profile = Profile {
+            allow_prerelease: true,
+            channel: "beta".into(),
+            ..Profile::default()
+        };
+        assert_eq!(profile.effective_channel(), "beta");
+    }
 }
