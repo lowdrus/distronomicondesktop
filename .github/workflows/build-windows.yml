@@ -68,6 +68,29 @@ jobs:
           Copy-Item $shot.FullName DistronomiconDesktop-real.png -Force
           if ((Get-Item DistronomiconDesktop-real.png).Length -lt 10000) { throw 'Rendered screenshot is unexpectedly small' }
 
+          New-Item -ItemType Directory -Force -Path assets | Out-Null
+          Copy-Item DistronomiconDesktop-real.png assets\distronomicon-desktop-real.png -Force
+
+          $readme = Get-Content README.md -Raw
+          $readme = $readme.Replace('![Distronomicon Desktop v1.4](assets/distronomicon-desktop-example.svg)', '![Distronomicon Desktop v1.4](assets/distronomicon-desktop-real.png)')
+          $oldText = 'A documentação agora usa **SVG vetorial escalável** para a prévia do repositório. Isso evita o aspecto quebrado/pixelado que ocorria ao ampliar o PNG antigo. O PNG histórico pode permanecer no repositório, mas não é mais a imagem principal do README.'
+          $newText = 'A imagem acima é uma **captura real da interface v1.4**, renderizada automaticamente a partir do próprio código da aplicação no Windows CI. Ela substitui a prévia antiga quebrada/pixelada e é atualizada junto com a interface.'
+          $readme = $readme.Replace($oldText, $newText)
+          Set-Content README.md -Value $readme -Encoding utf8
+
+      - name: Commit refreshed real screenshot and documentation
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+        shell: pwsh
+        run: |
+          $changes = git status --porcelain -- assets/distronomicon-desktop-real.png README.md
+          if ($changes) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add assets/distronomicon-desktop-real.png README.md
+            git commit -m "Refresh real application screenshot and documentation"
+            git push origin HEAD:$env:GITHUB_REF_NAME
+          }
+
       - name: Build portable release with static CRT
         env:
           RUSTFLAGS: -C target-feature=+crt-static
