@@ -74,6 +74,55 @@ jobs:
           if ((Get-Item portable\DistronomiconDesktop.exe).Length -le 0) { throw 'Portable EXE is empty' }
           (Get-FileHash portable\DistronomiconDesktop.exe -Algorithm SHA256).Hash.ToLower() + '  DistronomiconDesktop.exe' | Set-Content SHA256SUMS.txt
 
+      - name: Capture real Windows UI screenshot
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $exe = (Resolve-Path 'portable\DistronomiconDesktop.exe').Path
+          $process = Start-Process -FilePath $exe -PassThru
+          for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Milliseconds 500
+            $process.Refresh()
+            if ($process.MainWindowHandle -ne 0) { break }
+          }
+          if ($process.MainWindowHandle -eq 0) { throw 'Application window was not created in time' }
+
+          Add-Type -AssemblyName System.Drawing
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class DistronomiconWindowCapture {
+              [StructLayout(LayoutKind.Sequential)]
+              public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+              [DllImport("user32.dll")]
+              public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+          }
+          "@
+
+          $rect = New-Object DistronomiconWindowCapture+RECT
+          if (-not [DistronomiconWindowCapture]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) {
+            throw 'Could not read the application window bounds'
+          }
+          $width = $rect.Right - $rect.Left
+          $height = $rect.Bottom - $rect.Top
+          if ($width -lt 400 -or $height -lt 300) { throw "Unexpected window size: ${width}x${height}" }
+
+          $bitmap = New-Object System.Drawing.Bitmap $width, $height
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+          $graphics.Dispose()
+          $screenshot = Join-Path $PWD 'DistronomiconDesktop-real.png'
+          $bitmap.Save($screenshot, [System.Drawing.Imaging.ImageFormat]::Png)
+          $bitmap.Dispose()
+
+          if (-not $process.HasExited) {
+            $null = $process.CloseMainWindow()
+            Start-Sleep -Milliseconds 500
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+          if ((Get-Item $screenshot).Length -lt 10000) { throw 'Screenshot file is unexpectedly small' }
+          Write-Host "Real UI screenshot captured: $screenshot"
+
       - name: Verify Windows GUI executable and embedded icon
         shell: pwsh
         run: |
@@ -98,7 +147,8 @@ jobs:
             Cargo.lock
             portable/README.md
             portable/THIRD_PARTY_NOTICES.md
-          if-no-files-found: error
+            DistronomiconDesktop-real.png
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Publish or refresh GitHub Release
