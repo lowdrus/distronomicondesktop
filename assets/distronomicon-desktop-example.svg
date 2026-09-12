@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="727" viewBox="0 0 720 727">
+  <rect width="720" height="727" rx="8" fill="#1b1b1b"/>
+  <rect width="720" height="28" fill="#f4f0e5"/>
+  <text x="28" y="19" font-family="Segoe UI, sans-serif" font-size="12" fill="#111">Distronomicon Desktop</text>
+  <circle cx="649" cy="13" r="5" fill="none" stroke="#111"/>
+  <path d="M690 9l9 9M699 9l-9 9" stroke="#111"/>
+  <text x="7" y="53" font-family="Segoe UI, sans-serif" font-size="18" fill="#b9b9b9">Distronomicon Desktop</text>
+  <text x="7" y="73" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">Gerenciador de releases portátil e nativo para Windows.</text>
+  <text x="7" y="88" font-family="Segoe UI, sans-serif" font-size="9" fill="#8a8a8a">Sem WSL, terminal ou instalação.</text>
+  <rect x="570" y="37" width="102" height="20" rx="2" fill="#4b4b4b"/>
+  <text x="576" y="51" font-family="Segoe UI, sans-serif" font-size="12" fill="#ddd">PT-BR</text>
+  <path d="M655 42l7 0 -3.5 6z" fill="#999"/>
+  <rect x="679" y="39" width="14" height="14" rx="2" fill="#4b4b4b"/>
+  <path d="M682 45l3 3 5-7" fill="none" stroke="#bbb" stroke-width="1.5"/>
+  <text x="700" y="51" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">◐</text>
+  <text x="7" y="116" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">Perfil</text>
+  <rect x="7" y="122" width="287" height="20" rx="2" fill="#080808"/>
+  <text x="12" y="136" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">Selecione...</text>
+  <text x="7" y="162" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">Aplicação</text>
+  <rect x="7" y="168" width="287" height="20" rx="2" fill="#080808"/>
+  <text x="12" y="182" font-family="Segoe UI, sans-serif" font-size="12" fill="#bbb">meu-app</text>
+  <text x="7" y="200" font-family="Segoe UI, sans-serif" font-size="9" fill="#777">Nome local que identifica o programa gerenciado.</text>
+  <text x="7" y="223" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">Repositório GitHub</text>
+  <rect x="7" y="229" width="287" height="20" rx="2" fill="#080808"/>
+  <text x="12" y="243" font-family="Segoe UI, sans-serif" font-size="12" fill="#bbb">https://github.com/owner/repository</text>
+  <text x="7" y="261" font-family="Segoe UI, sans-serif" font-size="9" fill="#777">Aceita owner/repository ou URL completa válida do GitHub.</text>
+  <g font-family="Segoe UI, sans-serif" font-size="11" fill="#d0d0d0">
+    <rect x="7" y="282" width="58" height="20" rx="2" fill="#4b4b4b"/><text x="12" y="296">Verificar</text>
+    <rect x="72" y="282" width="58" height="20" rx="2" fill="#4b4b4b"/><text x="78" y="296">Prévia</text>
+    <rect x="137" y="282" width="63" height="20" rx="2" fill="#4b4b4b"/><text x="143" y="296">Atualizar</text>
+    <rect x="207" y="282" width="54" height="20" rx="2" fill="#4b4b4b"/><text x="213" y="296">Versão</text>
+    <rect x="268" y="282" width="59" height="20" rx="2" fill="#4b4b4b"/><text x="273" y="296">Reverter</text>
+    <rect x="334" y="282" width="78" height="20" rx="2" fill="#4b4b4b"/><text x="339" y="296">Diagnóstico</text>
+    <rect x="419" y="282" width="67" height="20" rx="2" fill="#4b4b4b"/><text x="425" y="296">Histórico</text>
+  </g>
+  <text x="12" y="332" font-family="Segoe UI, sans-serif" font-size="13" fill="#aaa">▸ Opções avançadas</text>
+  <line x1="7" y1="358" x2="710" y2="358" stroke="#444"/>
+  <text x="7" y="379" font-family="Segoe UI, sans-serif" font-size="12" fill="#aaa">Situação</text>
+  <rect x="7" y="385" width="703" height="155" rx="2" fill="#050505" stroke="#555"/>
+  <text x="12" y="402" font-family="Consolas, monospace" font-size="14" fill="#ddd">Pronto. Configure a aplicação e o repositório.</text>
+  <text x="7" y="588" font-family="Segoe UI, sans-serif" font-size="11" fill="#7c7c7c">Exemplo visual da interface DISTROD v1.3.0 — PT-BR / Dark Mode</text>
+</svg>

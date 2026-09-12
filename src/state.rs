@@ -1,3 +1,4 @@
+use crate::atomic_file;
 use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
@@ -22,26 +23,43 @@ pub fn now_unix() -> u64 {
 
 pub fn load(path: &Path) -> io::Result<Option<State>> {
     if !path.exists() {
-        return Ok(None);
+        let backup = atomic_file::backup_path(path);
+        if !backup.exists() {
+            return Ok(None);
+        }
+        return read_state(&backup).map(Some);
     }
-    let text = fs::read_to_string(path)?;
-    let state =
-        serde_json::from_str(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    Ok(Some(state))
+
+    match read_state(path) {
+        Ok(state) => Ok(Some(state)),
+        Err(primary_error) => {
+            let backup = atomic_file::backup_path(path);
+            if backup.exists() {
+                read_state(&backup).map(Some)
+            } else {
+                Err(primary_error)
+            }
+        }
+    }
 }
 
 pub fn save_atomic(path: &Path, state: &State) -> io::Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "state path has no parent"))?;
-    fs::create_dir_all(parent)?;
-    let tmp = path.with_extension("json.tmp");
-    let text = serde_json::to_string_pretty(state)
+    let bytes = serde_json::to_vec_pretty(state)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(&tmp, text)?;
-    if path.exists() {
-        fs::remove_file(path)?;
+    atomic_file::write(path, &bytes)
+}
+
+fn read_state(path: &Path) -> io::Result<State> {
+    let text = fs::read_to_string(path)?;
+    serde_json::from_str(&text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_path_is_predictable() {
+        assert!(atomic_file::backup_path(Path::new("state.json")).ends_with("state.json.bak"));
     }
-    fs::rename(tmp, path)?;
-    Ok(())
 }

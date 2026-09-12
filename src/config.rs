@@ -1,3 +1,7 @@
+use std::sync::atomic::{AtomicU8, Ordering};
+
+static CURRENT_LANGUAGE: AtomicU8 = AtomicU8::new(0);
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Language {
     PtBr,
@@ -14,9 +18,24 @@ impl Language {
 }
 
 pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static str {
+    CURRENT_LANGUAGE.store(
+        match language {
+            Language::PtBr => 0,
+            Language::En => 1,
+        },
+        Ordering::Relaxed,
+    );
     match language {
         Language::PtBr => pt,
         Language::En => en,
+    }
+}
+
+pub fn current_language() -> Language {
+    if CURRENT_LANGUAGE.load(Ordering::Relaxed) == 1 {
+        Language::En
+    } else {
+        Language::PtBr
     }
 }
 
@@ -24,10 +43,13 @@ pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static st
 pub enum Action {
     Check,
     Update,
+    DryRun,
     Version,
     Rollback,
     Doctor,
+    History,
     Unlock,
+    SelfUpdate,
 }
 
 #[derive(Clone)]
@@ -45,6 +67,8 @@ pub struct Config {
     pub skip_verification: bool,
     pub retain: usize,
     pub restart_command: String,
+    pub health_check_command: String,
+    pub pinned_version: String,
 }
 
 pub fn normalize_repo(value: &str) -> Result<String, String> {
@@ -113,17 +137,15 @@ pub fn validate(config: &Config, action: Action) -> Result<(), String> {
             config.language,
             "Nome da aplicação inválido para Windows. Evite caracteres < > : \" / \\ | ? *, '..', nomes reservados como CON/AUX/NUL/COM1/LPT1 e nomes terminados em ponto ou espaço.",
             "Invalid Windows application name. Avoid < > : \" / \\ | ? *, '..', reserved names such as CON/AUX/NUL/COM1/LPT1, and names ending in a dot or space.",
-        )
-        .into());
+        ).into());
     }
-    if matches!(action, Action::Check | Action::Update) {
+    if matches!(action, Action::Check | Action::Update | Action::DryRun) {
         if normalize_repo(&config.repo).is_err() {
             return Err(tr(
                 config.language,
                 "Use owner/repository ou uma URL completa do GitHub, como https://github.com/owner/repository.",
                 "Use owner/repository or a full GitHub URL such as https://github.com/owner/repository.",
-            )
-            .into());
+            ).into());
         }
         if config.github_host.is_empty() {
             return Err(tr(
@@ -201,5 +223,13 @@ mod tests {
         for name in ["app:one", "app?", "app*", "app.", "app ", "../app"] {
             assert!(!valid_windows_app_name(name), "{name}");
         }
+    }
+
+    #[test]
+    fn tracks_active_language() {
+        let _ = tr(Language::En, "pt", "en");
+        assert!(matches!(current_language(), Language::En));
+        let _ = tr(Language::PtBr, "pt", "en");
+        assert!(matches!(current_language(), Language::PtBr));
     }
 }
