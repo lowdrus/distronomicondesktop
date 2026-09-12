@@ -70,7 +70,7 @@ impl Default for DesktopApp {
             profile_name: String::new(),
             app_name: "meu-app".into(),
             repo: "owner/repository".into(),
-            asset_pattern: r"(?i).*\.(zip|exe)$".into(),
+            asset_pattern: r"(?i).*\.(zip|exe|tgz|tbz2|txz)$|.*\.tar\.(gz|bz2|xz|zst)$".into(),
             checksum_pattern: r"(?i)^(SHA256SUMS|checksums?(\.txt)?|.*sha256.*)$".into(),
             install_root: base.join("managed").display().to_string(),
             state_root: base.join(".distronomicon").display().to_string(),
@@ -194,15 +194,7 @@ impl DesktopApp {
             p.auto_mode.clone()
         };
         self.interval_minutes = p.interval_minutes.max(1);
-        self.channel = if p.channel.is_empty() {
-            if p.allow_prerelease {
-                "nightly".into()
-            } else {
-                "stable".into()
-            }
-        } else {
-            p.channel.clone()
-        };
+        self.channel = p.effective_channel();
         self.architecture = if p.architecture.is_empty() {
             "auto".into()
         } else {
@@ -390,17 +382,20 @@ impl DesktopApp {
     }
     fn open_release_page(&self) {
         let c = self.config();
-        let repo = config::normalize_repo(&c.repo).unwrap_or(c.repo.clone());
-        let url = format!("https://github.com/{repo}/releases");
-        if let Err(e) = features_v14::open_url(&url) {
-            self.set_status(format!(
+        let url = features_v14::current_release_url(&c).or_else(|_| {
+            let repo = config::normalize_repo(&c.repo).map_err(|e| e.to_string())?;
+            Ok::<String, String>(format!("https://github.com/{repo}/releases"))
+        });
+        match url.and_then(|url| features_v14::open_url(&url)) {
+            Ok(()) => {}
+            Err(e) => self.set_status(format!(
                 "{}: {e}",
                 tr(
                     self.language,
                     "Não foi possível abrir a página",
                     "Could not open page"
                 )
-            ));
+            )),
         }
     }
 
@@ -451,6 +446,8 @@ impl DesktopApp {
         egui::Window::new(tr(language, "Configurações", "Settings"))
             .open(&mut open)
             .default_width(590.0)
+            .default_height(650.0)
+            .vscroll(true)
             .show(ctx, |ui| {
                 ui.heading(tr(language, "Interface", "Interface"));
                 ui.checkbox(
