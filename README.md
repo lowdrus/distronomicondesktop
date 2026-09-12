@@ -25,9 +25,9 @@ A v1.3 introduziu perfis, automação, Dry Run, health check/rollback, pinning, 
 
 ## Interface
 
-![Distronomicon Desktop v1.4](assets/distronomicon-desktop-example.svg)
+![Distronomicon Desktop v1.4](assets/distronomicon-desktop-real.png)
 
-A documentação agora usa **SVG vetorial escalável** para a prévia do repositório. Isso evita o aspecto quebrado/pixelado que ocorria ao ampliar o PNG antigo. O PNG histórico pode permanecer no repositório, mas não é mais a imagem principal do README.
+A imagem acima é uma **captura real da interface v1.4**, renderizada automaticamente a partir do próprio código da aplicação no Windows CI. Ela substitui a prévia antiga quebrada/pixelada e é atualizada junto com a interface.
 
 A interface é PT-BR/EN, possui tema Dark/Light e um botão **⚙ Configurações**. Automação do Windows, tema, canal, arquitetura, self-update, backup, retenção e opções avançadas ficam concentrados nesse painel.
 
@@ -342,3 +342,4 @@ Nenhum passo de uso normal exige CMD, PowerShell visível, WSL ou Cargo.
 O Distronomicon Desktop preserva os conceitos centrais do projeto Linux e substitui integrações POSIX por equivalentes apropriados para Windows.
 
 O projeto original é MIT. A atribuição e o texto jurídico permanecem em [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
