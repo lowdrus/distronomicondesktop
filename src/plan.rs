@@ -110,6 +110,15 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
         prune.join(", ")
     };
     let required = features_v14::estimated_required_bytes(&plan.asset);
+    let architecture = if config.architecture == "auto" {
+        asset_select::detect_architecture()
+    } else {
+        &config.architecture
+    };
+    let downgrade = plan
+        .current
+        .as_deref()
+        .is_some_and(|c| features_v14::is_downgrade(c, &plan.release.tag_name));
     let action = if plan.current.as_deref() == Some(plan.release.tag_name.as_str()) {
         tr(
             config.language,
@@ -123,55 +132,49 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
             "The update will only happen when you click Update.",
         )
     };
-    let downgrade = plan
-        .current
-        .as_deref()
-        .is_some_and(|c| features_v14::is_downgrade(c, &plan.release.tag_name));
-    Ok(format!(
-        "{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}",
+
+    let mut lines = vec![
         tr(
             config.language,
             "PRÉVIA — nenhuma alteração foi feita.",
-            "DRY RUN — no changes were made."
+            "DRY RUN — no changes were made.",
+        )
+        .to_string(),
+        format!("{}: {current}", tr(config.language, "Versão atual", "Current version")),
+        format!("{}: {}", tr(config.language, "Versão alvo", "Target version"), plan.release.tag_name),
+        format!("{}: {}", tr(config.language, "Canal", "Channel"), config.channel),
+        format!("{}: {architecture}", tr(config.language, "Arquitetura", "Architecture")),
+        format!("{}: {pin}", tr(config.language, "Versão fixada", "Pinned version")),
+        format!("{}: {}", tr(config.language, "Asset selecionado", "Selected asset"), plan.asset.name),
+        format!("{}: {}", tr(config.language, "Tamanho do asset", "Asset size"), features_v14::format_size(plan.asset.size)),
+        format!("{}: {}", tr(config.language, "Espaço estimado necessário", "Estimated required space"), features_v14::format_size(required)),
+        format!("{}: {checksum}", tr(config.language, "Checksum", "Checksum")),
+        format!(
+            "{}: {}",
+            tr(config.language, "Possível downgrade", "Possible downgrade"),
+            if downgrade { tr(config.language, "sim", "yes") } else { tr(config.language, "não", "no") }
         ),
-        tr(config.language, "Versão atual", "Current version"),
-        current,
-        tr(config.language, "Versão alvo", "Target version"),
-        plan.release.tag_name,
-        tr(config.language, "Canal", "Channel"),
-        config.channel,
-        tr(config.language, "Arquitetura", "Architecture"),
-        if config.architecture == "auto" {
-            asset_select::detect_architecture()
-        } else {
-            &config.architecture
-        },
-        tr(config.language, "Versão fixada", "Pinned version"),
-        pin,
-        tr(config.language, "Asset selecionado", "Selected asset"),
-        plan.asset.name,
-        tr(
-            config.language,
-            "Tamanho estimado necessário",
-            "Estimated required size"
+        format!(
+            "{}: {prune_text}",
+            tr(
+                config.language,
+                "Remoção prevista por quantidade",
+                "Expected removal by count"
+            )
         ),
-        features_v14::format_size(required),
-        tr(config.language, "Checksum", "Checksum"),
-        checksum,
-        tr(config.language, "Possível downgrade", "Possible downgrade"),
-        if downgrade {
-            tr(config.language, "sim", "yes")
-        } else {
-            tr(config.language, "não", "no")
-        },
-        tr(
-            config.language,
-            "Versões que serão removidas pela retenção por quantidade",
-            "Releases that count retention will remove"
+        format!(
+            "{}: {}",
+            tr(config.language, "Retenção por dias", "Retention by days"),
+            if config.retention_days == 0 { tr(config.language, "desativada", "disabled").to_string() } else { format!("{}", config.retention_days) }
         ),
-        prune_text,
-        action
-    ))
+        format!(
+            "{}: {}",
+            tr(config.language, "Limite de espaço das releases", "Release disk limit"),
+            if config.max_disk_mb == 0 { tr(config.language, "desativado", "disabled").to_string() } else { format!("{} MB", config.max_disk_mb) }
+        ),
+    ];
+    lines.push(action.to_string());
+    Ok(lines.join("\n"))
 }
 
 pub fn release_notes(config: &Config) -> Result<String, String> {
