@@ -182,7 +182,7 @@ fn collect_exes(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
 fn authenticode_status(path: &Path) -> Result<String, String> {
     #[cfg(windows)]
     {
-        let escaped = path.display().to_string().replace(''', "''");
+        let escaped = path.display().to_string().replace('\'', "''");
         let script = format!("(Get-AuthenticodeSignature -LiteralPath '{escaped}').Status.ToString()");
         let output = Command::new("powershell.exe")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &script])
@@ -213,7 +213,7 @@ pub fn notify(config: &Config, title: &str, message: &str) {
 }
 
 fn ps_escape(value: &str) -> String {
-    value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace(''', "&apos;")
+    value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
 }
 
 pub fn open_path(path: &Path) -> Result<(), String> {
