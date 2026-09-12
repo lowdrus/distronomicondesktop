@@ -5,7 +5,7 @@ use reqwest::header::{ACCEPT, AUTHORIZATION};
 use sha2::{Digest, Sha256};
 use std::{
     fs::File,
-    io::{self, Read},
+    io::Read,
     path::Path,
     thread,
     time::Duration,
@@ -55,22 +55,6 @@ fn send_with_retry(
         }
     }
     Err(last_error)
-}
-
-pub fn download_asset_to_file(
-    client: &Client,
-    token: Option<&str>,
-    asset: &Asset,
-    destination: &Path,
-) -> Result<(), String> {
-    if let Some(parent) = destination.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let mut response = send_with_retry(client, token, asset)?;
-    let mut file = File::create(destination).map_err(|e| e.to_string())?;
-    io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 pub fn verify_sha256(
