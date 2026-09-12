@@ -14,6 +14,14 @@ pub struct UpdatePlan {
     pub validators: release::Validators,
 }
 
+fn selected_channel(config: &Config) -> &str {
+    if config.channel == "stable" && config.allow_prerelease {
+        "nightly"
+    } else {
+        config.channel.as_str()
+    }
+}
+
 pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
     let state_path = PathBuf::from(&config.state_root)
         .join(&config.app_name)
@@ -32,15 +40,28 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
         .build()
         .map_err(|e| e.to_string())?;
     features_v14::test_connectivity(&client, config)?;
-    let fetched = release::fetch_selected_channel(
-        &client,
-        &config.github_host,
-        &config.repo,
-        token(config),
-        &config.channel,
-        &config.pinned_version,
-        &previous,
-    )?;
+    let channel = selected_channel(config);
+    let fetched = if channel == "stable" {
+        release::fetch_selected(
+            &client,
+            &config.github_host,
+            &config.repo,
+            token(config),
+            false,
+            &config.pinned_version,
+            &previous,
+        )?
+    } else {
+        release::fetch_selected_channel(
+            &client,
+            &config.github_host,
+            &config.repo,
+            token(config),
+            channel,
+            &config.pinned_version,
+            &previous,
+        )?
+    };
     let validators = fetched.validators.clone();
     let release = fetched.release.ok_or_else(|| {
         tr(
@@ -152,7 +173,7 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
         format!(
             "{}: {}",
             tr(config.language, "Canal", "Channel"),
-            config.channel
+            selected_channel(config)
         ),
         format!(
             "{}: {architecture}",
@@ -208,7 +229,7 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
             if config.retention_days == 0 {
                 tr(config.language, "desativada", "disabled").to_string()
             } else {
-                format!("{}", config.retention_days)
+                config.retention_days.to_string()
             }
         ),
         format!(
