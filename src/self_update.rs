@@ -4,7 +4,7 @@ use crate::{
     download_resume, release, verify,
 };
 use reqwest::blocking::Client;
-use std::{fs, io, path::PathBuf, process::Command, time::Duration};
+use std::{fs, io, path::Path, process::Command, time::Duration};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -103,7 +103,7 @@ fn compare_versions(a: &str, b: &str) -> i32 {
     0
 }
 
-fn spawn_hidden(script: &PathBuf) -> io::Result<()> {
+fn spawn_hidden(script: &Path) -> io::Result<()> {
     let mut cmd = Command::new("cmd.exe");
     cmd.args(["/C", &script.display().to_string()]);
     #[cfg(windows)]
