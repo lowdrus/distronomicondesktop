@@ -56,7 +56,7 @@ mod documentation_screenshot {
     fn render_real_ui_for_documentation() {
         let mut harness = Harness::new_eframe(|_cc| app_v14::DesktopApp::default());
         harness.set_size(egui::vec2(920.0, 760.0));
-        harness.run();
+        harness.run_steps(2);
         harness.remove_cursor();
         harness.snapshot("distronomicon-desktop-real");
     }
