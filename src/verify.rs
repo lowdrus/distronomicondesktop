@@ -3,13 +3,7 @@ use regex::Regex;
 use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use sha2::{Digest, Sha256};
-use std::{
-    fs::File,
-    io::Read,
-    path::Path,
-    thread,
-    time::Duration,
-};
+use std::{fs::File, io::Read, path::Path, thread, time::Duration};
 
 pub fn select_asset<'a>(assets: &'a [Asset], pattern: &str) -> Result<&'a Asset, String> {
     let regex = Regex::new(pattern).map_err(|e| format!("Invalid asset pattern: {e}"))?;
