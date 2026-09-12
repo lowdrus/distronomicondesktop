@@ -7,7 +7,6 @@ mod check;
 mod check_v13;
 mod config;
 mod download_resume;
-mod extract;
 mod features_v14;
 mod history;
 mod install;
