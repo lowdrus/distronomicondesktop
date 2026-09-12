@@ -95,12 +95,9 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
     let releases_dir = PathBuf::from(&config.install_root)
         .join(&config.app_name)
         .join("releases");
-    let prune = install::preview_prune_after_install(
-        &releases_dir,
-        &plan.release.tag_name,
-        config.retain,
-    )
-    .map_err(|e| e.to_string())?;
+    let prune =
+        install::preview_prune_after_install(&releases_dir, &plan.release.tag_name, config.retain)
+            .map_err(|e| e.to_string())?;
     let prune_text = if prune.is_empty() {
         tr(config.language, "nenhuma", "none").to_string()
     } else {
