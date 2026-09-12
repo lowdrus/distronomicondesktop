@@ -32,7 +32,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Normalize Rust formatting and lockfile
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature-v1.3')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           cargo fmt --all
@@ -42,8 +42,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add Cargo.lock build.rs src
             git commit -m "Normalize Rust formatting and lock dependencies"
-            $branch = $env:GITHUB_REF_NAME
-            git push origin "HEAD:$branch"
+            git push origin HEAD:main
           }
 
       - name: Cache Cargo
