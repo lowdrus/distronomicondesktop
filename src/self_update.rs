@@ -1,6 +1,6 @@
 use crate::{
     asset_select,
-    config::{Language, tr},
+    config::{Language, current_language, tr},
     download_resume, release, verify,
 };
 use reqwest::blocking::Client;
@@ -12,7 +12,7 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn run() -> Result<String, String> {
-    run_language(Language::PtBr)
+    run_language(current_language())
 }
 
 pub fn run_language(language: Language) -> Result<String, String> {
