@@ -43,7 +43,7 @@ impl Default for Profile {
             name: String::new(),
             app_name: String::new(),
             repo: String::new(),
-            asset_pattern: r"(?i).*\.(zip|exe)$".into(),
+            asset_pattern: r"(?i).*\.(zip|exe|tgz|tbz2|txz)$|.*\.tar\.(gz|bz2|xz|zst)$".into(),
             checksum_pattern: r"(?i)^(SHA256SUMS|checksums?(\.txt)?|.*sha256.*)$".into(),
             install_root: String::new(),
             state_root: String::new(),
