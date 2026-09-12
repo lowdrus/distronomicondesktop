@@ -1,3 +1,7 @@
+use std::sync::atomic::{AtomicU8, Ordering};
+
+static CURRENT_LANGUAGE: AtomicU8 = AtomicU8::new(0);
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Language {
     PtBr,
@@ -14,9 +18,24 @@ impl Language {
 }
 
 pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static str {
+    CURRENT_LANGUAGE.store(
+        match language {
+            Language::PtBr => 0,
+            Language::En => 1,
+        },
+        Ordering::Relaxed,
+    );
     match language {
         Language::PtBr => pt,
         Language::En => en,
+    }
+}
+
+pub fn current_language() -> Language {
+    if CURRENT_LANGUAGE.load(Ordering::Relaxed) == 1 {
+        Language::En
+    } else {
+        Language::PtBr
     }
 }
 
@@ -157,33 +176,22 @@ mod tests {
 
     #[test]
     fn normalizes_owner_repo() {
-        assert_eq!(
-            normalize_repo("lowdrus/distronomicondesktop").unwrap(),
-            "lowdrus/distronomicondesktop"
-        );
+        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
     }
 
     #[test]
     fn normalizes_full_github_url() {
-        assert_eq!(
-            normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(),
-            "lowdrus/distronomicondesktop"
-        );
+        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
     }
 
     #[test]
     fn normalizes_git_suffix_and_trailing_slash() {
-        assert_eq!(
-            normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(),
-            "lowdrus/distronomicondesktop"
-        );
+        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(), "lowdrus/distronomicondesktop");
     }
 
     #[test]
     fn rejects_extra_path_segments() {
-        assert!(
-            normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()
-        );
+        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
     }
 
     #[test]
@@ -204,5 +212,13 @@ mod tests {
         for name in ["app:one", "app?", "app*", "app.", "app ", "../app"] {
             assert!(!valid_windows_app_name(name), "{name}");
         }
+    }
+
+    #[test]
+    fn tracks_active_language() {
+        let _ = tr(Language::En, "pt", "en");
+        assert!(matches!(current_language(), Language::En));
+        let _ = tr(Language::PtBr, "pt", "en");
+        assert!(matches!(current_language(), Language::PtBr));
     }
 }
