@@ -45,3 +45,19 @@ fn main() -> eframe::Result<()> {
         Box::new(|_cc| Ok(Box::<app_v14::DesktopApp>::default())),
     )
 }
+
+#[cfg(test)]
+mod documentation_screenshot {
+    use super::*;
+    use egui_kittest::Harness;
+
+    #[test]
+    #[ignore = "run explicitly in CI to generate the README screenshot"]
+    fn render_real_ui_for_documentation() {
+        let mut harness = Harness::new_eframe(|_cc| app_v14::DesktopApp::default());
+        harness.set_size(egui::vec2(920.0, 760.0));
+        harness.run();
+        harness.remove_cursor();
+        harness.snapshot("distronomicon-desktop-real");
+    }
+}
