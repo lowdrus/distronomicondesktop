@@ -92,8 +92,36 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
     } else {
         config.pinned_version.trim()
     };
+    let releases_dir = PathBuf::from(&config.install_root)
+        .join(&config.app_name)
+        .join("releases");
+    let prune = install::preview_prune_after_install(
+        &releases_dir,
+        &plan.release.tag_name,
+        config.retain,
+    )
+    .map_err(|e| e.to_string())?;
+    let prune_text = if prune.is_empty() {
+        tr(config.language, "nenhuma", "none").to_string()
+    } else {
+        prune.join(", ")
+    };
+    let action = if plan.current.as_deref() == Some(plan.release.tag_name.as_str()) {
+        tr(
+            config.language,
+            "Nenhuma instalação necessária; a versão alvo já está ativa.",
+            "No installation is required; the target version is already active.",
+        )
+    } else {
+        tr(
+            config.language,
+            "A atualização só acontecerá ao clicar em Atualizar.",
+            "The update will only happen when you click Update.",
+        )
+    };
+
     Ok(format!(
-        "{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}",
+        "{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}",
         tr(
             config.language,
             "PRÉVIA — nenhuma alteração foi feita.",
@@ -115,9 +143,11 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
             .display(),
         tr(
             config.language,
-            "A atualização só acontecerá ao clicar em Atualizar.",
-            "The update will only happen when you click Update."
-        )
+            "Versões que serão removidas pela retenção",
+            "Releases that retention will remove"
+        ),
+        prune_text,
+        action
     ))
 }
 
