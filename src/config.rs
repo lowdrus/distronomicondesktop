@@ -176,22 +176,33 @@ mod tests {
 
     #[test]
     fn normalizes_owner_repo() {
-        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("lowdrus/distronomicondesktop").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
     fn normalizes_full_github_url() {
-        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
     fn normalizes_git_suffix_and_trailing_slash() {
-        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(), "lowdrus/distronomicondesktop");
+        assert_eq!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(),
+            "lowdrus/distronomicondesktop"
+        );
     }
 
     #[test]
     fn rejects_extra_path_segments() {
-        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
+        assert!(
+            normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()
+        );
     }
 
     #[test]
