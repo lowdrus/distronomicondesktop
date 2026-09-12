@@ -22,6 +22,9 @@ bzip2 = "0.6"
 xz2 = "0.1"
 zstd = "0.13"
 
+[dev-dependencies]
+egui_kittest = { version = "0.33.3", features = ["wgpu", "snapshot"] }
+
 [build-dependencies]
 winres = "0.1"
 
