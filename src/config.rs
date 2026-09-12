@@ -3,54 +3,20 @@ use std::sync::atomic::{AtomicU8, Ordering};
 static CURRENT_LANGUAGE: AtomicU8 = AtomicU8::new(0);
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum Language {
-    PtBr,
-    En,
-}
-
+pub enum Language { PtBr, En }
 impl Language {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::PtBr => "PT-BR",
-            Self::En => "EN",
-        }
-    }
+    pub fn label(self) -> &'static str { match self { Self::PtBr => "PT-BR", Self::En => "EN" } }
 }
 
 pub fn tr(language: Language, pt: &'static str, en: &'static str) -> &'static str {
-    CURRENT_LANGUAGE.store(
-        match language {
-            Language::PtBr => 0,
-            Language::En => 1,
-        },
-        Ordering::Relaxed,
-    );
-    match language {
-        Language::PtBr => pt,
-        Language::En => en,
-    }
+    CURRENT_LANGUAGE.store(if matches!(language, Language::En) { 1 } else { 0 }, Ordering::Relaxed);
+    match language { Language::PtBr => pt, Language::En => en }
 }
 
-pub fn current_language() -> Language {
-    if CURRENT_LANGUAGE.load(Ordering::Relaxed) == 1 {
-        Language::En
-    } else {
-        Language::PtBr
-    }
-}
+pub fn current_language() -> Language { if CURRENT_LANGUAGE.load(Ordering::Relaxed) == 1 { Language::En } else { Language::PtBr } }
 
 #[derive(Clone, Copy)]
-pub enum Action {
-    Check,
-    Update,
-    DryRun,
-    Version,
-    Rollback,
-    Doctor,
-    History,
-    Unlock,
-    SelfUpdate,
-}
+pub enum Action { Check, Update, DryRun, Version, Rollback, Doctor, History, Unlock, SelfUpdate, ReleaseNotes, Recovery }
 
 #[derive(Clone)]
 pub struct Config {
@@ -82,159 +48,59 @@ pub struct Config {
 pub fn normalize_repo(value: &str) -> Result<String, String> {
     let mut repo = value.trim().trim_end_matches('/').to_string();
     for prefix in ["https://github.com/", "http://github.com/", "github.com/"] {
-        if let Some(rest) = repo.strip_prefix(prefix) {
-            repo = rest.to_string();
-            break;
-        }
+        if let Some(rest) = repo.strip_prefix(prefix) { repo = rest.to_string(); break; }
     }
-    if let Some(stripped) = repo.strip_suffix(".git") {
-        repo = stripped.to_string();
-    }
+    if let Some(stripped) = repo.strip_suffix(".git") { repo = stripped.to_string(); }
     let parts = repo.split('/').collect::<Vec<_>>();
-    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
-        return Err("invalid repository".into());
-    }
-    if parts.iter().any(|part| part.contains(['?', '#', '\\'])) {
-        return Err("invalid repository".into());
-    }
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() { return Err("invalid repository".into()); }
+    if parts.iter().any(|part| part.contains(['?', '#', '\\'])) { return Err("invalid repository".into()); }
     Ok(format!("{}/{}", parts[0], parts[1]))
 }
 
 pub fn normalize_app_name(value: &str, repo: &str) -> String {
     let value = value.trim();
     if let Ok(normalized) = normalize_repo(value) {
-        return normalized
-            .split('/')
-            .next_back()
-            .unwrap_or("app")
-            .to_string();
+        return normalized.split('/').next_back().unwrap_or("app").to_string();
     }
     if value.is_empty() || value.eq_ignore_ascii_case("meu-app") {
-        if let Ok(normalized) = normalize_repo(repo) {
-            return normalized
-                .split('/')
-                .next_back()
-                .unwrap_or("app")
-                .to_string();
-        }
+        if let Ok(normalized) = normalize_repo(repo) { return normalized.split('/').next_back().unwrap_or("app").to_string(); }
     }
     value.to_string()
 }
 
 fn valid_windows_app_name(app: &str) -> bool {
-    if app.is_empty()
-        || app.contains("..")
-        || app.ends_with([' ', '.'])
-        || app
-            .chars()
-            .any(|c| c < ' ' || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'))
-    {
-        return false;
-    }
-
+    if app.is_empty() || app.contains("..") || app.ends_with([' ', '.']) || app.chars().any(|c| c < ' ' || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')) { return false; }
     let stem = app.split('.').next().unwrap_or("").to_ascii_uppercase();
-    !matches!(
-        stem.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL"
-            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
-            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
-    )
+    !matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9")
 }
 
 pub fn validate(config: &Config, action: Action) -> Result<(), String> {
     if !valid_windows_app_name(&config.app_name) {
-        return Err(tr(
-            config.language,
-            "Nome da aplicação inválido para Windows. Use um nome simples, sem barras. Se você colar owner/repository, o Distronomicon converte automaticamente para o nome do repositório.",
-            "Invalid Windows application name. Use a simple name without slashes. If you paste owner/repository, Distronomicon automatically converts it to the repository name.",
-        )
-        .into());
+        return Err(tr(config.language, "Nome da aplicação inválido para Windows. Use um nome simples, sem barras. Se você colar owner/repository, o Distronomicon converte automaticamente para o nome do repositório.", "Invalid Windows application name. Use a simple name without slashes. If you paste owner/repository, Distronomicon automatically converts it to the repository name.").into());
     }
-    if matches!(action, Action::Check | Action::Update | Action::DryRun) {
+    if matches!(action, Action::Check | Action::Update | Action::DryRun | Action::ReleaseNotes) {
         if normalize_repo(&config.repo).is_err() {
-            return Err(tr(
-                config.language,
-                "Use owner/repository ou uma URL completa do GitHub, como https://github.com/owner/repository.",
-                "Use owner/repository or a full GitHub URL such as https://github.com/owner/repository.",
-            )
-            .into());
+            return Err(tr(config.language, "Use owner/repository ou uma URL completa do GitHub, como https://github.com/owner/repository.", "Use owner/repository or a full GitHub URL such as https://github.com/owner/repository.").into());
         }
-        if config.github_host.is_empty() {
-            return Err(tr(
-                config.language,
-                "Informe o host da API do GitHub.",
-                "Enter the GitHub API host.",
-            )
-            .into());
-        }
+        if config.github_host.is_empty() { return Err(tr(config.language, "Informe o host da API do GitHub.", "Enter the GitHub API host.").into()); }
     }
-    if matches!(action, Action::Update)
-        && !config.skip_verification
-        && config.checksum_pattern.is_empty()
-    {
-        return Err(tr(
-            config.language,
-            "Informe o padrão do checksum ou habilite 'Pular verificação'.",
-            "Enter a checksum pattern or enable 'Skip verification'.",
-        )
-        .into());
+    if matches!(action, Action::Update) && !config.skip_verification && config.checksum_pattern.is_empty() {
+        return Err(tr(config.language, "Informe o padrão do checksum ou habilite 'Pular verificação'.", "Enter a checksum pattern or enable 'Skip verification'.").into());
     }
-    if !matches!(config.channel.as_str(), "stable" | "beta" | "nightly") {
-        return Err(tr(config.language, "Canal inválido.", "Invalid channel.").into());
-    }
-    if !matches!(config.architecture.as_str(), "auto" | "x64" | "arm64" | "x86") {
-        return Err(tr(config.language, "Arquitetura inválida.", "Invalid architecture.").into());
-    }
+    if !matches!(config.channel.as_str(), "stable" | "beta" | "nightly") { return Err(tr(config.language, "Canal inválido.", "Invalid channel.").into()); }
+    if !matches!(config.architecture.as_str(), "auto" | "x64" | "arm64" | "x86") { return Err(tr(config.language, "Arquitetura inválida.", "Invalid architecture.").into()); }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn normalizes_owner_repo() {
-        assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
-    }
-
-    #[test]
-    fn normalizes_full_github_url() {
-        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop");
-    }
-
-    #[test]
-    fn normalizes_git_suffix_and_trailing_slash() {
-        assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(), "lowdrus/distronomicondesktop");
-    }
-
-    #[test]
-    fn derives_app_name_from_repo_like_input() {
-        assert_eq!(normalize_app_name("lowdrus/distronomicondesktop", ""), "distronomicondesktop");
-    }
-
-    #[test]
-    fn rejects_extra_path_segments() {
-        assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err());
-    }
-
-    #[test]
-    fn accepts_normal_windows_app_name() {
-        assert!(valid_windows_app_name("distronomicondesktop"));
-        assert!(valid_windows_app_name("meu-app"));
-    }
-
-    #[test]
-    fn rejects_reserved_windows_app_names() {
-        for name in ["CON", "con.txt", "AUX", "NUL", "COM1", "LPT9"] {
-            assert!(!valid_windows_app_name(name), "{name}");
-        }
-    }
-
-    #[test]
-    fn tracks_active_language() {
-        let _ = tr(Language::En, "pt", "en");
-        assert!(matches!(current_language(), Language::En));
-        let _ = tr(Language::PtBr, "pt", "en");
-        assert!(matches!(current_language(), Language::PtBr));
-    }
+    #[test] fn normalizes_owner_repo() { assert_eq!(normalize_repo("lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop"); }
+    #[test] fn normalizes_full_github_url() { assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop").unwrap(), "lowdrus/distronomicondesktop"); }
+    #[test] fn normalizes_git_suffix_and_trailing_slash() { assert_eq!(normalize_repo("https://github.com/lowdrus/distronomicondesktop.git/").unwrap(), "lowdrus/distronomicondesktop"); }
+    #[test] fn derives_app_name_from_repo_like_input() { assert_eq!(normalize_app_name("lowdrus/distronomicondesktop", ""), "distronomicondesktop"); }
+    #[test] fn rejects_extra_path_segments() { assert!(normalize_repo("https://github.com/lowdrus/distronomicondesktop/releases").is_err()); }
+    #[test] fn accepts_normal_windows_app_name() { assert!(valid_windows_app_name("distronomicondesktop")); assert!(valid_windows_app_name("meu-app")); }
+    #[test] fn rejects_reserved_windows_app_names() { for name in ["CON", "con.txt", "AUX", "NUL", "COM1", "LPT9"] { assert!(!valid_windows_app_name(name), "{name}"); } }
+    #[test] fn tracks_active_language() { let _ = tr(Language::En, "pt", "en"); assert!(matches!(current_language(), Language::En)); let _ = tr(Language::PtBr, "pt", "en"); assert!(matches!(current_language(), Language::PtBr)); }
 }
