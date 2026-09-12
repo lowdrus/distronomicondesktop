@@ -1,7 +1,7 @@
 use crate::{
     asset_select,
     config::{Config, tr},
-    install, release, state, verify,
+    features_v14, install, release, state, verify,
 };
 use reqwest::blocking::Client;
 use std::{path::PathBuf, time::Duration};
@@ -14,11 +14,19 @@ pub struct UpdatePlan {
     pub validators: release::Validators,
 }
 
+fn selected_channel(config: &Config) -> &str {
+    if config.channel == "stable" && config.allow_prerelease {
+        "nightly"
+    } else {
+        config.channel.as_str()
+    }
+}
+
 pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
     let state_path = PathBuf::from(&config.state_root)
         .join(&config.app_name)
         .join("state.json");
-    let existing = state::load(&state_path).map_err(|e| e.to_string())?;
+    let existing = state::load(&state_path).unwrap_or(None);
     let previous = existing
         .as_ref()
         .map(|value| release::Validators {
@@ -31,15 +39,29 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
         .timeout(Duration::from_secs(300))
         .build()
         .map_err(|e| e.to_string())?;
-    let fetched = release::fetch_selected(
-        &client,
-        &config.github_host,
-        &config.repo,
-        token(config),
-        config.allow_prerelease,
-        &config.pinned_version,
-        &previous,
-    )?;
+    features_v14::test_connectivity(&client, config)?;
+    let channel = selected_channel(config);
+    let fetched = if channel == "stable" {
+        release::fetch_selected(
+            &client,
+            &config.github_host,
+            &config.repo,
+            token(config),
+            false,
+            &config.pinned_version,
+            &previous,
+        )?
+    } else {
+        release::fetch_selected_channel(
+            &client,
+            &config.github_host,
+            &config.repo,
+            token(config),
+            channel,
+            &config.pinned_version,
+            &previous,
+        )?
+    };
     let validators = fetched.validators.clone();
     let release = fetched.release.ok_or_else(|| {
         tr(
@@ -49,7 +71,12 @@ pub fn build(config: &Config) -> Result<(Client, UpdatePlan), String> {
         )
         .to_string()
     })?;
-    let asset = asset_select::select(&release.assets, &config.asset_pattern)?.clone();
+    let asset = asset_select::select_for_arch(
+        &release.assets,
+        &config.asset_pattern,
+        &config.architecture,
+    )?
+    .clone();
     let checksum = if config.skip_verification {
         None
     } else {
@@ -103,6 +130,16 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
     } else {
         prune.join(", ")
     };
+    let required = features_v14::estimated_required_bytes(&plan.asset);
+    let architecture = if config.architecture == "auto" {
+        asset_select::detect_architecture()
+    } else {
+        &config.architecture
+    };
+    let downgrade = plan
+        .current
+        .as_deref()
+        .is_some_and(|c| features_v14::is_downgrade(c, &plan.release.tag_name));
     let action = if plan.current.as_deref() == Some(plan.release.tag_name.as_str()) {
         tr(
             config.language,
@@ -117,34 +154,116 @@ pub fn dry_run(config: &Config) -> Result<String, String> {
         )
     };
 
-    Ok(format!(
-        "{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}",
+    let mut lines = vec![
         tr(
             config.language,
             "PRÉVIA — nenhuma alteração foi feita.",
-            "DRY RUN — no changes were made."
+            "DRY RUN — no changes were made.",
+        )
+        .to_string(),
+        format!(
+            "{}: {current}",
+            tr(config.language, "Versão atual", "Current version")
         ),
-        tr(config.language, "Versão atual", "Current version"),
-        current,
-        tr(config.language, "Versão alvo", "Target version"),
-        plan.release.tag_name,
-        tr(config.language, "Versão fixada", "Pinned version"),
-        pin,
-        tr(config.language, "Asset selecionado", "Selected asset"),
-        plan.asset.name,
-        tr(config.language, "Checksum", "Checksum"),
-        checksum,
-        tr(config.language, "Destino", "Destination"),
-        PathBuf::from(&config.install_root)
-            .join(&config.app_name)
-            .display(),
+        format!(
+            "{}: {}",
+            tr(config.language, "Versão alvo", "Target version"),
+            plan.release.tag_name
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Canal", "Channel"),
+            selected_channel(config)
+        ),
+        format!(
+            "{}: {architecture}",
+            tr(config.language, "Arquitetura", "Architecture")
+        ),
+        format!(
+            "{}: {pin}",
+            tr(config.language, "Versão fixada", "Pinned version")
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Asset selecionado", "Selected asset"),
+            plan.asset.name
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Tamanho do asset", "Asset size"),
+            features_v14::format_size(plan.asset.size)
+        ),
+        format!(
+            "{}: {}",
+            tr(
+                config.language,
+                "Espaço estimado necessário",
+                "Estimated required space"
+            ),
+            features_v14::format_size(required)
+        ),
+        format!(
+            "{}: {checksum}",
+            tr(config.language, "Checksum", "Checksum")
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Possível downgrade", "Possible downgrade"),
+            if downgrade {
+                tr(config.language, "sim", "yes")
+            } else {
+                tr(config.language, "não", "no")
+            }
+        ),
+        format!(
+            "{}: {prune_text}",
+            tr(
+                config.language,
+                "Remoção prevista por quantidade",
+                "Expected removal by count"
+            )
+        ),
+        format!(
+            "{}: {}",
+            tr(config.language, "Retenção por dias", "Retention by days"),
+            if config.retention_days == 0 {
+                tr(config.language, "desativada", "disabled").to_string()
+            } else {
+                config.retention_days.to_string()
+            }
+        ),
+        format!(
+            "{}: {}",
+            tr(
+                config.language,
+                "Limite de espaço das releases",
+                "Release disk limit"
+            ),
+            if config.max_disk_mb == 0 {
+                tr(config.language, "desativado", "disabled").to_string()
+            } else {
+                format!("{} MB", config.max_disk_mb)
+            }
+        ),
+    ];
+    lines.push(action.to_string());
+    Ok(lines.join("\n"))
+}
+
+pub fn release_notes(config: &Config) -> Result<String, String> {
+    let (_, plan) = build(config)?;
+    let body = if plan.release.body.trim().is_empty() {
         tr(
             config.language,
-            "Versões que serão removidas pela retenção",
-            "Releases that retention will remove"
-        ),
-        prune_text,
-        action
+            "Sem notas de release.",
+            "No release notes.",
+        )
+    } else {
+        plan.release.body.trim()
+    };
+    Ok(format!(
+        "{} — {}\n\n{}",
+        plan.release.tag_name, plan.release.html_url, body
     ))
 }
 

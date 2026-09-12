@@ -3,8 +3,9 @@ use reqwest::blocking::Client;
 use reqwest::header::{ACCEPT, AUTHORIZATION, RANGE};
 use std::{
     fs::{File, OpenOptions},
-    io,
+    io::{Read, Write},
     path::Path,
+    sync::atomic::{AtomicBool, Ordering},
     thread,
     time::Duration,
 };
@@ -58,6 +59,17 @@ pub fn download(
     asset: &Asset,
     destination: &Path,
 ) -> Result<bool, String> {
+    let cancel = AtomicBool::new(false);
+    download_cancellable(client, token, asset, destination, &cancel)
+}
+
+pub fn download_cancellable(
+    client: &Client,
+    token: Option<&str>,
+    asset: &Asset,
+    destination: &Path,
+    cancel: &AtomicBool,
+) -> Result<bool, String> {
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -80,7 +92,19 @@ pub fn download(
     } else {
         File::create(destination).map_err(|e| e.to_string())?
     };
-    io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
+    let mut buffer = [0u8; 128 * 1024];
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            file.sync_all().map_err(|e| e.to_string())?;
+            return Err("DOWNLOAD_CANCELLED".into());
+        }
+        let count = response.read(&mut buffer).map_err(|e| e.to_string())?;
+        if count == 0 {
+            break;
+        }
+        file.write_all(&buffer[..count])
+            .map_err(|e| e.to_string())?;
+    }
     file.sync_all().map_err(|e| e.to_string())?;
     Ok(resumed)
 }

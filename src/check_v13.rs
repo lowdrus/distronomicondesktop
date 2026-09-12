@@ -1,15 +1,18 @@
 use crate::{
     config::{Config, tr},
-    plan, state,
+    features_v14, plan, state,
 };
 use std::path::PathBuf;
 
 pub fn check(config: &Config) -> Result<String, String> {
+    let state_path = PathBuf::from(&config.state_root)
+        .join(&config.app_name)
+        .join("state.json");
+    if state::load(&state_path).is_err() {
+        let _ = features_v14::recover_state(config);
+    }
     let (_, plan) = plan::build(config)?;
     if let Some(current) = &plan.current {
-        let state_path = PathBuf::from(&config.state_root)
-            .join(&config.app_name)
-            .join("state.json");
         let mut value = state::load(&state_path)
             .map_err(|e| e.to_string())?
             .unwrap_or_default();
@@ -26,32 +29,42 @@ pub fn check(config: &Config) -> Result<String, String> {
         state::save_atomic(&state_path, &value).map_err(|e| e.to_string())?;
     }
 
-    Ok(match plan.current {
+    let message = match plan.current {
         Some(current) if current == plan.release.tag_name => format!(
             "{}: {}",
             tr(config.language, "Atualizado", "Up to date"),
             current
         ),
-        Some(current) => format!(
-            "{}: {} → {}\n{}",
-            tr(
-                config.language,
-                "Atualização disponível",
-                "Update available"
-            ),
-            current,
-            plan.release.tag_name,
-            plan.release.html_url
-        ),
-        None => format!(
-            "{}: {}\n{}",
-            tr(
-                config.language,
-                "Instalação disponível",
-                "Install available"
-            ),
-            plan.release.tag_name,
-            plan.release.html_url
-        ),
-    })
+        Some(current) => {
+            let text = format!(
+                "{}: {} → {}\n{}",
+                tr(
+                    config.language,
+                    "Atualização disponível",
+                    "Update available"
+                ),
+                current,
+                plan.release.tag_name,
+                plan.release.html_url
+            );
+            features_v14::notify(config, "Distronomicon Desktop", &text.replace('\n', " "));
+            text
+        }
+        None => {
+            let text = format!(
+                "{}: {}\n{}",
+                tr(
+                    config.language,
+                    "Instalação disponível",
+                    "Install available"
+                ),
+                plan.release.tag_name,
+                plan.release.html_url
+            );
+            features_v14::notify(config, "Distronomicon Desktop", &text.replace('\n', " "));
+            text
+        }
+    };
+    features_v14::log(config, "INFO", &message);
+    Ok(message)
 }

@@ -8,7 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Profile {
     pub name: String,
     pub app_name: String,
@@ -26,9 +27,58 @@ pub struct Profile {
     pub pinned_version: String,
     pub auto_mode: String,
     pub interval_minutes: u32,
+    pub channel: String,
+    pub architecture: String,
+    pub backup_paths: String,
+    pub verify_authenticode: bool,
+    pub max_disk_mb: u64,
+    pub retention_days: u64,
+    pub allow_downgrade: bool,
+    pub notifications: bool,
+}
+
+impl Default for Profile {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            app_name: String::new(),
+            repo: String::new(),
+            asset_pattern: r"(?i).*\.(zip|exe|tgz|tbz2|txz)$|.*\.tar\.(gz|bz2|xz|zst)$".into(),
+            checksum_pattern: r"(?i)^(SHA256SUMS|checksums?(\.txt)?|.*sha256.*)$".into(),
+            install_root: String::new(),
+            state_root: String::new(),
+            github_host: "https://api.github.com".into(),
+            allow_prerelease: false,
+            skip_verification: false,
+            retain: 3,
+            restart_command: String::new(),
+            health_check_command: String::new(),
+            pinned_version: String::new(),
+            auto_mode: "check".into(),
+            interval_minutes: 60,
+            channel: "stable".into(),
+            architecture: "auto".into(),
+            backup_paths: String::new(),
+            verify_authenticode: true,
+            max_disk_mb: 0,
+            retention_days: 0,
+            allow_downgrade: false,
+            notifications: true,
+        }
+    }
 }
 
 impl Profile {
+    pub fn effective_channel(&self) -> String {
+        if self.allow_prerelease && (self.channel.is_empty() || self.channel == "stable") {
+            "nightly".into()
+        } else if self.channel.is_empty() {
+            "stable".into()
+        } else {
+            self.channel.clone()
+        }
+    }
+
     pub fn to_config(&self, language: Language, github_token: String) -> Config {
         Config {
             language,
@@ -46,12 +96,27 @@ impl Profile {
             restart_command: self.restart_command.clone(),
             health_check_command: self.health_check_command.clone(),
             pinned_version: self.pinned_version.clone(),
+            channel: self.effective_channel(),
+            architecture: if self.architecture.is_empty() {
+                "auto".into()
+            } else {
+                self.architecture.clone()
+            },
+            backup_paths: self.backup_paths.clone(),
+            verify_authenticode: self.verify_authenticode,
+            max_disk_mb: self.max_disk_mb,
+            retention_days: self.retention_days,
+            allow_downgrade: self.allow_downgrade,
+            notifications: self.notifications,
         }
     }
 }
 
 pub fn default_path(base: &Path) -> PathBuf {
     base.join(".distronomicon").join("profiles.json")
+}
+pub fn export_path(base: &Path) -> PathBuf {
+    base.join("DistronomiconProfiles.json")
 }
 
 pub fn load(path: &Path) -> io::Result<Vec<Profile>> {
@@ -85,6 +150,16 @@ pub fn save(path: &Path, profiles: &[Profile]) -> io::Result<()> {
     atomic_file::write(path, &bytes)
 }
 
+pub fn export_profiles(base: &Path, profiles: &[Profile]) -> io::Result<PathBuf> {
+    let path = export_path(base);
+    save(&path, profiles)?;
+    Ok(path)
+}
+
+pub fn import_profiles(base: &Path) -> io::Result<Vec<Profile>> {
+    read_profiles(&export_path(base))
+}
+
 pub fn upsert(profiles: &mut Vec<Profile>, profile: Profile) {
     if let Some(existing) = profiles
         .iter_mut()
@@ -99,4 +174,29 @@ pub fn upsert(profiles: &mut Vec<Profile>, profile: Profile) {
 
 pub fn remove(profiles: &mut Vec<Profile>, name: &str) {
     profiles.retain(|p| !p.name.eq_ignore_ascii_case(name));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrates_legacy_prerelease_profile_to_nightly() {
+        let profile = Profile {
+            allow_prerelease: true,
+            channel: "stable".into(),
+            ..Profile::default()
+        };
+        assert_eq!(profile.effective_channel(), "nightly");
+    }
+
+    #[test]
+    fn keeps_explicit_beta_channel() {
+        let profile = Profile {
+            allow_prerelease: true,
+            channel: "beta".into(),
+            ..Profile::default()
+        };
+        assert_eq!(profile.effective_channel(), "beta");
+    }
 }

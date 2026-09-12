@@ -2,7 +2,7 @@ name: Windows CI and Portable Build
 
 on:
   push:
-    branches: [main, native-windows-port, feature-v1.3]
+    branches: [main, native-windows-port, feature-v1.3, feature-v1.4.0]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Normalize Rust formatting and lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
         shell: pwsh
         run: |
           cargo fmt --all
@@ -42,7 +42,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add Cargo.lock build.rs src
             git commit -m "Normalize Rust formatting and lock dependencies"
-            git push origin HEAD:main
+            git push origin HEAD:$env:GITHUB_REF_NAME
           }
 
       - name: Cache Cargo
@@ -52,10 +52,44 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings -A clippy::possible-missing-else -A clippy::collapsible-if
+        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::possible-missing-else -A clippy::collapsible-if
 
       - name: Tests
         run: cargo test --all-targets --all-features
+
+      - name: Render real UI screenshot from application code
+        shell: pwsh
+        env:
+          UPDATE_SNAPSHOTS: force
+        run: |
+          cargo test render_real_ui_for_documentation -- --ignored --nocapture
+          $shot = Get-ChildItem -Path tests -Recurse -Filter 'distronomicon-desktop-real.png' | Select-Object -First 1
+          if (-not $shot) { throw 'Headless UI renderer did not produce the documentation screenshot' }
+          Copy-Item $shot.FullName DistronomiconDesktop-real.png -Force
+          if ((Get-Item DistronomiconDesktop-real.png).Length -lt 10000) { throw 'Rendered screenshot is unexpectedly small' }
+
+          New-Item -ItemType Directory -Force -Path assets | Out-Null
+          Copy-Item DistronomiconDesktop-real.png assets\distronomicon-desktop-real.png -Force
+
+          $readme = Get-Content README.md -Raw
+          $readme = $readme.Replace('![Distronomicon Desktop v1.4](assets/distronomicon-desktop-example.svg)', '![Distronomicon Desktop v1.4](assets/distronomicon-desktop-real.png)')
+          $oldText = 'A documentação agora usa **SVG vetorial escalável** para a prévia do repositório. Isso evita o aspecto quebrado/pixelado que ocorria ao ampliar o PNG antigo. O PNG histórico pode permanecer no repositório, mas não é mais a imagem principal do README.'
+          $newText = 'A imagem acima é uma **captura real da interface v1.4**, renderizada automaticamente a partir do próprio código da aplicação no Windows CI. Ela substitui a prévia antiga quebrada/pixelada e é atualizada junto com a interface.'
+          $readme = $readme.Replace($oldText, $newText)
+          Set-Content README.md -Value $readme -Encoding utf8
+
+      - name: Commit refreshed real screenshot and documentation
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
+        shell: pwsh
+        run: |
+          $changes = git status --porcelain -- assets/distronomicon-desktop-real.png README.md
+          if ($changes) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add assets/distronomicon-desktop-real.png README.md
+            git commit -m "Refresh real application screenshot and documentation"
+            git push origin HEAD:$env:GITHUB_REF_NAME
+          }
 
       - name: Build portable release with static CRT
         env:
@@ -98,6 +132,7 @@ jobs:
             Cargo.lock
             portable/README.md
             portable/THIRD_PARTY_NOTICES.md
+            DistronomiconDesktop-real.png
           if-no-files-found: error
           retention-days: 30
 

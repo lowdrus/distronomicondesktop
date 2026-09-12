@@ -1,12 +1,12 @@
 use crate::{
     check_v13,
     config::{self, Language},
-    profiles, update_v13,
+    profiles, update_v14,
 };
 use std::{
     fs,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 pub fn maybe_run(args: &[String]) -> Option<i32> {
@@ -24,16 +24,20 @@ fn run(profile_name: &str, mode: &str) -> Result<(), String> {
         .parent()
         .map(PathBuf::from)
         .ok_or_else(|| "Executable has no parent".to_string())?;
-    let profiles_path = profiles::default_path(&base);
-    let list = profiles::load(&profiles_path).map_err(|e| e.to_string())?;
+    let list = profiles::load(&profiles::default_path(&base)).map_err(|e| e.to_string())?;
     let profile = list
         .into_iter()
         .find(|p| p.name.eq_ignore_ascii_case(profile_name))
         .ok_or_else(|| format!("Profile not found: {profile_name}"))?;
     let mut config = profile.to_config(Language::En, String::new());
     config.repo = config::normalize_repo(&config.repo)?;
+    config.app_name = config::normalize_app_name(&config.app_name, &config.repo);
     let result = if mode.eq_ignore_ascii_case("update") {
-        update_v13::run(&config, &Arc::new(Mutex::new(String::new())))
+        update_v14::run(
+            &config,
+            &Arc::new(Mutex::new(String::new())),
+            &AtomicBool::new(false),
+        )
     } else {
         check_v13::check(&config)
     };
