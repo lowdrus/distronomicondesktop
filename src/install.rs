@@ -53,12 +53,32 @@ pub fn install_release(
 }
 
 pub fn current_tag(root: &Path, app: &str) -> io::Result<Option<String>> {
-    let path = root.join(app).join("current.txt");
+    let app_root = root.join(app);
+    let current = app_root.join("current.txt");
+    let backup = atomic_file::backup_path(&current);
+
+    if let Some(tag) = read_valid_current(&current, &app_root)? {
+        return Ok(Some(tag));
+    }
+    if let Some(tag) = read_valid_current(&backup, &app_root)? {
+        return Ok(Some(tag));
+    }
+    Ok(None)
+}
+
+fn read_valid_current(path: &Path, app_root: &Path) -> io::Result<Option<String>> {
     if !path.exists() {
         return Ok(None);
     }
     let tag = fs::read_to_string(path)?.trim().to_string();
-    Ok((!tag.is_empty()).then_some(tag))
+    if tag.is_empty() {
+        return Ok(None);
+    }
+    if app_root.join("releases").join(&tag).is_dir() {
+        Ok(Some(tag))
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn list_releases(root: &Path, app: &str) -> io::Result<Vec<String>> {
@@ -66,18 +86,9 @@ pub fn list_releases(root: &Path, app: &str) -> io::Result<Vec<String>> {
     if !releases.exists() {
         return Ok(Vec::new());
     }
-    let mut entries = fs::read_dir(releases)?
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter_map(|e| {
-            Some((
-                e.file_name().to_string_lossy().to_string(),
-                e.metadata().ok()?.modified().ok()?,
-            ))
-        })
-        .collect::<Vec<_>>();
-    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.cmp(&a.0)));
-    Ok(entries.into_iter().map(|(tag, _)| tag).collect())
+    let mut entries = release_entries(&releases)?;
+    entries.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
+    Ok(entries.into_iter().map(|(tag, _, _)| tag).collect())
 }
 
 pub fn activate_release(root: &Path, app: &str, tag: &str) -> io::Result<()> {
@@ -132,10 +143,8 @@ fn refresh_bin(bin_dir: &Path, release_dir: &Path) -> io::Result<()> {
     let old = bin_dir.with_extension("old");
     let _ = fs::remove_dir_all(&temp);
     let _ = fs::remove_dir_all(&old);
-
     mirror_tree(release_dir, &temp)?;
     sync_tree(&temp)?;
-
     if bin_dir.exists() {
         fs::rename(bin_dir, &old)?;
     }
@@ -149,6 +158,31 @@ fn refresh_bin(bin_dir: &Path, release_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
+pub fn preview_prune_after_install(
+    releases_dir: &Path,
+    incoming_tag: &str,
+    retain: usize,
+) -> io::Result<Vec<String>> {
+    let mut entries = if releases_dir.exists() {
+        release_entries(releases_dir)?
+    } else {
+        Vec::new()
+    };
+    if !entries.iter().any(|(tag, _, _)| tag == incoming_tag) {
+        entries.push((
+            incoming_tag.to_string(),
+            releases_dir.join(incoming_tag),
+            SystemTime::now(),
+        ));
+    }
+    entries.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
+    Ok(entries
+        .into_iter()
+        .skip(retain)
+        .filter_map(|(tag, _, _)| (tag != incoming_tag).then_some(tag))
+        .collect())
+}
+
 pub fn prune_old_releases(
     releases_dir: &Path,
     current_tag: &str,
@@ -157,17 +191,7 @@ pub fn prune_old_releases(
     if !releases_dir.exists() {
         return Ok((Vec::new(), Vec::new()));
     }
-    let mut entries = fs::read_dir(releases_dir)?
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .filter_map(|e| {
-            Some((
-                e.file_name().to_string_lossy().to_string(),
-                e.path(),
-                e.metadata().ok()?.modified().ok()?,
-            ))
-        })
-        .collect::<Vec<_>>();
+    let mut entries = release_entries(releases_dir)?;
     entries.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
     let mut deleted = Vec::new();
     let mut failed = Vec::new();
@@ -181,4 +205,18 @@ pub fn prune_old_releases(
         }
     }
     Ok((deleted, failed))
+}
+
+fn release_entries(releases_dir: &Path) -> io::Result<Vec<(String, PathBuf, SystemTime)>> {
+    Ok(fs::read_dir(releases_dir)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter_map(|entry| {
+            Some((
+                entry.file_name().to_string_lossy().to_string(),
+                entry.path(),
+                entry.metadata().ok()?.modified().ok()?,
+            ))
+        })
+        .collect())
 }
