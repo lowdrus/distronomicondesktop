@@ -57,6 +57,17 @@ jobs:
       - name: Tests
         run: cargo test --all-targets --all-features
 
+      - name: Render real UI screenshot from application code
+        shell: pwsh
+        env:
+          UPDATE_SNAPSHOTS: force
+        run: |
+          cargo test render_real_ui_for_documentation -- --ignored --nocapture
+          $shot = Get-ChildItem -Path tests -Recurse -Filter 'distronomicon-desktop-real.png' | Select-Object -First 1
+          if (-not $shot) { throw 'Headless UI renderer did not produce the documentation screenshot' }
+          Copy-Item $shot.FullName DistronomiconDesktop-real.png -Force
+          if ((Get-Item DistronomiconDesktop-real.png).Length -lt 10000) { throw 'Rendered screenshot is unexpectedly small' }
+
       - name: Build portable release with static CRT
         env:
           RUSTFLAGS: -C target-feature=+crt-static
@@ -73,55 +84,6 @@ jobs:
           if (-not (Test-Path portable\DistronomiconDesktop.exe)) { throw 'Portable EXE was not produced' }
           if ((Get-Item portable\DistronomiconDesktop.exe).Length -le 0) { throw 'Portable EXE is empty' }
           (Get-FileHash portable\DistronomiconDesktop.exe -Algorithm SHA256).Hash.ToLower() + '  DistronomiconDesktop.exe' | Set-Content SHA256SUMS.txt
-
-      - name: Capture real Windows UI screenshot
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $exe = (Resolve-Path 'portable\DistronomiconDesktop.exe').Path
-          $process = Start-Process -FilePath $exe -PassThru
-          for ($i = 0; $i -lt 20; $i++) {
-            Start-Sleep -Milliseconds 500
-            $process.Refresh()
-            if ($process.MainWindowHandle -ne 0) { break }
-          }
-          if ($process.MainWindowHandle -eq 0) { throw 'Application window was not created in time' }
-
-          Add-Type -AssemblyName System.Drawing
-          Add-Type @"
-          using System;
-          using System.Runtime.InteropServices;
-          public static class DistronomiconWindowCapture {
-              [StructLayout(LayoutKind.Sequential)]
-              public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-              [DllImport("user32.dll")]
-              public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-          }
-          "@
-
-          $rect = New-Object DistronomiconWindowCapture+RECT
-          if (-not [DistronomiconWindowCapture]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) {
-            throw 'Could not read the application window bounds'
-          }
-          $width = $rect.Right - $rect.Left
-          $height = $rect.Bottom - $rect.Top
-          if ($width -lt 400 -or $height -lt 300) { throw "Unexpected window size: ${width}x${height}" }
-
-          $bitmap = New-Object System.Drawing.Bitmap $width, $height
-          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-          $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
-          $graphics.Dispose()
-          $screenshot = Join-Path $PWD 'DistronomiconDesktop-real.png'
-          $bitmap.Save($screenshot, [System.Drawing.Imaging.ImageFormat]::Png)
-          $bitmap.Dispose()
-
-          if (-not $process.HasExited) {
-            $null = $process.CloseMainWindow()
-            Start-Sleep -Milliseconds 500
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
-          }
-          if ((Get-Item $screenshot).Length -lt 10000) { throw 'Screenshot file is unexpectedly small' }
-          Write-Host "Real UI screenshot captured: $screenshot"
 
       - name: Verify Windows GUI executable and embedded icon
         shell: pwsh
@@ -148,7 +110,7 @@ jobs:
             portable/README.md
             portable/THIRD_PARTY_NOTICES.md
             DistronomiconDesktop-real.png
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Publish or refresh GitHub Release
