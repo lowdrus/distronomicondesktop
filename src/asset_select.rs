@@ -20,8 +20,15 @@ pub fn select_for_arch<'a>(
     architecture: &str,
 ) -> Result<&'a Asset, String> {
     let regex = Regex::new(pattern).map_err(|e| format!("Invalid asset pattern: {e}"))?;
-    let arch = if architecture == "auto" { detect_architecture() } else { architecture };
-    let mut candidates = assets.iter().filter(|a| regex.is_match(&a.name)).collect::<Vec<_>>();
+    let arch = if architecture == "auto" {
+        detect_architecture()
+    } else {
+        architecture
+    };
+    let mut candidates = assets
+        .iter()
+        .filter(|a| regex.is_match(&a.name))
+        .collect::<Vec<_>>();
     if candidates.is_empty() {
         return Err(format!("No release asset matches pattern: {pattern}"));
     }
@@ -35,28 +42,48 @@ fn score(name: &str, arch: &str) -> i32 {
     if n.contains("windows") || n.contains("win64") || n.contains("win-") || n.contains("win32") {
         value += 40;
     }
-    if n.ends_with(".zip") { value += 8; }
-    if n.ends_with(".exe") { value += 7; }
-    if n.contains("portable") { value += 4; }
+    if n.ends_with(".zip") {
+        value += 8;
+    }
+    if n.ends_with(".exe") {
+        value += 7;
+    }
+    if n.contains("portable") {
+        value += 4;
+    }
     if n.contains("linux") || n.contains("darwin") || n.contains("macos") || n.contains("osx") {
         value -= 100;
     }
 
-    let is_x64 = n.contains("x86_64") || n.contains("x64") || n.contains("amd64") || n.contains("win64");
+    let is_x64 =
+        n.contains("x86_64") || n.contains("x64") || n.contains("amd64") || n.contains("win64");
     let is_arm64 = n.contains("arm64") || n.contains("aarch64");
-    let is_x86 = n.contains("x86") || n.contains("i686") || n.contains("win32") || n.contains("32-bit");
+    let is_x86 =
+        n.contains("x86") || n.contains("i686") || n.contains("win32") || n.contains("32-bit");
     match arch {
         "arm64" => {
-            if is_arm64 { value += 45; }
-            if is_x64 || is_x86 { value -= 35; }
+            if is_arm64 {
+                value += 45;
+            }
+            if is_x64 || is_x86 {
+                value -= 35;
+            }
         }
         "x86" => {
-            if is_x86 && !is_x64 { value += 45; }
-            if is_x64 || is_arm64 { value -= 35; }
+            if is_x86 && !is_x64 {
+                value += 45;
+            }
+            if is_x64 || is_arm64 {
+                value -= 35;
+            }
         }
         _ => {
-            if is_x64 { value += 45; }
-            if is_arm64 || (is_x86 && !is_x64) { value -= 35; }
+            if is_x64 {
+                value += 45;
+            }
+            if is_arm64 || (is_x86 && !is_x64) {
+                value -= 35;
+            }
         }
     }
     value

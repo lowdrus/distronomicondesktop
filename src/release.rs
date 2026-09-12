@@ -56,7 +56,11 @@ pub fn fetch_selected(
         host,
         repo,
         token,
-        if allow_prerelease { "nightly" } else { "stable" },
+        if allow_prerelease {
+            "nightly"
+        } else {
+            "stable"
+        },
         pinned_version,
         previous,
     )
@@ -160,15 +164,33 @@ pub fn fetch_latest(
 
     let response = request.send().map_err(|e| e.to_string())?;
     let validators = Validators {
-        etag: response.headers().get(ETAG).and_then(|v| v.to_str().ok()).unwrap_or("").to_string(),
-        last_modified: response.headers().get(LAST_MODIFIED).and_then(|v| v.to_str().ok()).unwrap_or("").to_string(),
+        etag: response
+            .headers()
+            .get(ETAG)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string(),
+        last_modified: response
+            .headers()
+            .get(LAST_MODIFIED)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string(),
     };
     if response.status() == reqwest::StatusCode::NOT_MODIFIED {
-        return Ok(FetchResult { release: None, validators, not_modified: true });
+        return Ok(FetchResult {
+            release: None,
+            validators,
+            not_modified: true,
+        });
     }
     let response = response.error_for_status().map_err(|e| e.to_string())?;
     let release = response.json::<Release>().map_err(|e| e.to_string())?;
-    Ok(FetchResult { release: Some(release), validators, not_modified: false })
+    Ok(FetchResult {
+        release: Some(release),
+        validators,
+        not_modified: false,
+    })
 }
 
 fn fetch_from_list(
@@ -187,15 +209,26 @@ fn fetch_from_list(
     if let Some(token) = token.filter(|t| !t.trim().is_empty()) {
         request = request.header(AUTHORIZATION, format!("Bearer {}", token.trim()));
     }
-    let response = request.send().map_err(|e| e.to_string())?.error_for_status().map_err(|e| e.to_string())?;
+    let response = request
+        .send()
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
     let mut releases: Vec<Release> = response.json().map_err(|e| e.to_string())?;
     releases.retain(|r| !r.draft);
     if let Some(required) = prerelease_only {
         releases.retain(|r| r.prerelease == required);
     }
     releases.sort_by_key(|r| Reverse(r.published_at.clone().or_else(|| r.created_at.clone())));
-    let release = releases.into_iter().next().ok_or_else(|| "No GitHub release found for selected channel".to_string())?;
-    Ok(FetchResult { release: Some(release), validators: Validators::default(), not_modified: false })
+    let release = releases
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No GitHub release found for selected channel".to_string())?;
+    Ok(FetchResult {
+        release: Some(release),
+        validators: Validators::default(),
+        not_modified: false,
+    })
 }
 
 fn encode_tag(tag: &str) -> String {
