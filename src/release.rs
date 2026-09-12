@@ -45,7 +45,21 @@ pub fn fetch_selected(
 ) -> Result<FetchResult, String> {
     let pin = pinned_version.trim();
     if pin.is_empty() || pin.eq_ignore_ascii_case("latest") {
-        fetch_latest(client, host, repo, token, allow_prerelease, previous)
+        let first = fetch_latest(client, host, repo, token, allow_prerelease, previous)?;
+        if first.not_modified {
+            // Planning/updating needs the full release assets even after a conditional 304.
+            // Re-fetch without validators while keeping the network-efficient first request.
+            fetch_latest(
+                client,
+                host,
+                repo,
+                token,
+                allow_prerelease,
+                &Validators::default(),
+            )
+        } else {
+            Ok(first)
+        }
     } else {
         fetch_tag(client, host, repo, token, pin)
     }
